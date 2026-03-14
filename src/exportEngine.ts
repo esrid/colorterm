@@ -61,7 +61,7 @@ if vim.fn.exists("syntax_on") then
 end
 vim.o.termguicolors = true
 vim.g.colors_name = "colorterm_theme"
-vim.o.background = "${(document.getElementById('gen-tone') as HTMLSelectElement)?.value === 'light' ? 'light' : 'dark'}"
+vim.o.background = "dark"
 
 local hl = function(group, opts)
   vim.api.nvim_set_hl(0, group, opts)
@@ -660,7 +660,7 @@ font_name: "${font}"`
 -- Use with: :colorscheme mytheme
 
 vim.o.termguicolors = true
-vim.o.background = "${(document.getElementById('gen-tone') as HTMLSelectElement).value === 'light' ? 'light' : 'dark'}"
+vim.o.background = "dark"
 vim.o.guifont = "${font}:h${size}"`
     default:
       return '# Settings not supported for this format'

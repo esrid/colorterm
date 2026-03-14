@@ -791,7 +791,7 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
 
   try {
     const zip = new JSZip()
-    const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix']
+    const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16']
     
     formats.forEach(f => {
       let ext = 'conf'
