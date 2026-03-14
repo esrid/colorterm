@@ -15,6 +15,8 @@ import { generateCoherentTheme } from './themeGenerator'
 import { ThemeState } from './themeState'
 import { TerminalApp } from './terminalApp'
 import { EditorPreview } from './editorPreview'
+import { ColorWheel } from './colorWheel'
+import type { HarmonyMode } from './colorWheel'
 import JSZip from 'jszip'
 
 // Register HLJS languages
@@ -32,6 +34,7 @@ import "@fontsource/jetbrains-mono/700.css"
 const themeState = new ThemeState()
 let terminalApp: TerminalApp
 let editorPreview: EditorPreview
+let colorWheel: ColorWheel
 let isProEditor = false
 
 const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
@@ -212,6 +215,21 @@ app.innerHTML = `
         <label style="font-size: 0.65rem; color: var(--text-muted); min-width: 65px;">Brightness</label>
         <input type="range" id="adjust-bri" value="1" min="0.5" max="1.5" step="0.05" style="flex: 1;">
       </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Harmony Wheel</h3>
+    <div class="control-group">
+      <select id="harmony-mode" style="font-size: 0.7rem;">
+        <option value="none">No Harmony (Manual)</option>
+        <option value="complementary">Complementary</option>
+        <option value="triadic">Triadic</option>
+        <option value="analogous">Analogous</option>
+        <option value="split-complementary">Split Complementary</option>
+        <option value="tetradic">Tetradic</option>
+      </select>
+      <div id="harmony-wheel-container" style="display: flex; justify-content: center; margin-top: 8px;"></div>
     </div>
   </div>
 
@@ -465,6 +483,7 @@ function updateTerminalTheme() {
   const opacity = parseFloat((document.getElementById('term-opacity') as HTMLInputElement).value)
   if (terminalApp) terminalApp.updateTheme(currentScheme, opacity)
   if (editorPreview) editorPreview.updateTheme(currentScheme)
+  if (colorWheel) colorWheel.updateColors(currentScheme as any)
   const ratio = getContrast(currentScheme.background, currentScheme.foreground)
   const badge = document.getElementById('contrast-badge')!
   let status = 'Fail', color = '#ff4c4c'
@@ -498,6 +517,13 @@ function updateTerminalTheme() {
 
 terminalApp = new TerminalApp('terminal')
 editorPreview = new EditorPreview(document.getElementById('editor-preview')!)
+colorWheel = new ColorWheel(document.getElementById('harmony-wheel-container')!, (id, hex) => {
+  themeState.updateCurrentColor(id, hex)
+  applyScheme()
+})
+document.getElementById('harmony-mode')!.addEventListener('change', (e) => {
+  colorWheel.setHarmonyMode((e.target as HTMLSelectElement).value as HarmonyMode)
+})
 applyScheme()
 
 function refreshPreview() {
