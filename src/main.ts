@@ -291,20 +291,20 @@ app.innerHTML = `
   <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; gap: 8px;">
     <button id="toggle-pro-editor" class="randomize-btn" style="width: auto; padding: 4px 12px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main); font-size: 0.7rem;">✨ Pro Editor: Off</button>
     <select id="preview-mode" style="width: auto; padding: 4px 12px;">
-      <option value="react">Preview: React (Code)</option>
-      <option value="rust">Preview: Rust (Code)</option>
-      <option value="go">Preview: Go (Code)</option>
-      <option value="cpp">Preview: C++ (Code)</option>
-      <option value="python">Preview: Python (Code)</option>
-      <option value="html">Preview: HTML (Code)</option>
-      <option value="css">Preview: CSS (Code)</option>
-      <option value="sql">Preview: SQL (Code)</option>
-      <option value="markdown">Preview: Markdown (Code)</option>
-      <option value="json">Preview: JSON (Code)</option>
-      <option value="htop">Preview: htop (Terminal)</option>
-      <option value="ls">Preview: ls -la (Terminal)</option>
-      <option value="git">Preview: git log (Terminal)</option>
-      <option value="neofetch">Preview: neofetch (Terminal)</option>
+      <option value="react (Code)">Preview: React (Code)</option>
+      <option value="rust (Code)">Preview: Rust (Code)</option>
+      <option value="go (Code)">Preview: Go (Code)</option>
+      <option value="cpp (Code)">Preview: C++ (Code)</option>
+      <option value="python (Code)">Preview: Python (Code)</option>
+      <option value="html (Code)">Preview: HTML (Code)</option>
+      <option value="css (Code)">Preview: CSS (Code)</option>
+      <option value="sql (Code)">Preview: SQL (Code)</option>
+      <option value="markdown (Code)">Preview: Markdown (Code)</option>
+      <option value="json (Code)">Preview: JSON (Code)</option>
+      <option value="htop (Terminal)">Preview: htop (Terminal)</option>
+      <option value="ls (Terminal)">Preview: ls -la (Terminal)</option>
+      <option value="git (Terminal)">Preview: git log (Terminal)</option>
+      <option value="neofetch (Terminal)">Preview: neofetch (Terminal)</option>
     </select>
   </div>
   <div class="terminal-container">
@@ -536,6 +536,16 @@ function refreshPreview() {
 
 document.getElementById('toggle-pro-editor')!.addEventListener('click', () => {
   isProEditor = !isProEditor
+  
+  const modeSelect = document.getElementById('preview-mode') as HTMLSelectElement
+  const mode = modeSelect.value
+  const isCode = mode.includes('(Code)')
+  
+  // If we turn it ON but are on a Terminal view, switch to a Code view automatically
+  if (isProEditor && !isCode) {
+    modeSelect.value = 'react (Code)'
+  }
+  
   refreshPreview()
 })
 
