@@ -191,3 +191,84 @@ export async function extractPaletteFromImage(file: File): Promise<Partial<Color
     reader.readAsDataURL(file)
   })
 }
+
+/**
+ * Intelligently inverts a theme from dark to light or vice versa.
+ */
+export function generateInvertedTheme(scheme: ColorScheme): ColorScheme {
+  const isDark = getLuminance(scheme.background) < 0.5
+  const newScheme = { ...scheme }
+  
+  const invertLightness = (hex: string, darkRange: [number, number], lightRange: [number, number]) => {
+    const { h, s, l } = hexToHsl(hex)
+    const currentRange = isDark ? darkRange : lightRange
+    const targetRange = isDark ? lightRange : darkRange
+    
+    // Normalize lightness within current range to [0, 1]
+    const normalizedL = (l - currentRange[0]) / (currentRange[1] - currentRange[0])
+    // Map to target range inversely
+    const newL = targetRange[1] - (normalizedL * (targetRange[1] - targetRange[0]))
+    
+    return hslToHex(h, s, Math.min(100, Math.max(0, newL)))
+  }
+
+  // 1. Invert Background and UI Layers
+  newScheme.background = invertLightness(scheme.background, [0, 15], [85, 98])
+  newScheme.mantle = invertLightness(scheme.mantle, [0, 12], [80, 95])
+  newScheme.crust = invertLightness(scheme.crust, [0, 10], [75, 92])
+  newScheme.surface0 = invertLightness(scheme.surface0, [15, 25], [70, 90])
+  newScheme.surface1 = invertLightness(scheme.surface1, [20, 30], [65, 85])
+  newScheme.surface2 = invertLightness(scheme.surface2, [25, 35], [60, 80])
+
+  // 2. Invert Foreground
+  newScheme.foreground = invertLightness(scheme.foreground, [75, 95], [5, 25])
+  newScheme.cursor = scheme.cursor
+
+  // 3. Adjust ANSI Colors
+  // On Dark themes, ANSI colors are usually L=60-80
+  // On Light themes, they should be L=30-50 for readability
+  const ansiKeys = [
+    'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'black',
+    'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'brightBlack',
+    'primary', 'secondary', 'accent'
+  ]
+
+  ansiKeys.forEach(key => {
+    const hex = (scheme as any)[key]
+    const { h, s, l } = hexToHsl(hex)
+    
+    let newL
+    if (isDark) {
+      // Dark -> Light: Make it darker
+      // If it's a "bright" variant or white, make it even darker
+      const isBright = key.startsWith('bright') || key === 'white'
+      newL = isBright ? Math.max(20, l - 40) : Math.max(25, l - 30)
+    } else {
+      // Light -> Dark: Make it lighter
+      const isBright = key.startsWith('bright') || key === 'white'
+      newL = isBright ? Math.min(95, l + 40) : Math.min(90, l + 30)
+    }
+    
+    ;(newScheme as any)[key] = hslToHex(h, s, newL)
+  })
+
+  // 4. Update Base16 Mappings (Simplified)
+  newScheme.base00 = newScheme.background
+  newScheme.base01 = newScheme.mantle
+  newScheme.base02 = newScheme.surface0
+  newScheme.base03 = newScheme.brightBlack
+  newScheme.base04 = newScheme.surface1
+  newScheme.base05 = newScheme.foreground
+  newScheme.base06 = newScheme.foreground
+  newScheme.base07 = newScheme.foreground
+  newScheme.base08 = newScheme.red
+  newScheme.base09 = newScheme.brightRed
+  newScheme.base0A = newScheme.yellow
+  newScheme.base0B = newScheme.green
+  newScheme.base0C = newScheme.cyan
+  newScheme.base0D = newScheme.blue
+  newScheme.base0E = newScheme.magenta
+  newScheme.base0F = newScheme.brightMagenta
+
+  return newScheme
+}

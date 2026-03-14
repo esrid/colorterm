@@ -1,6 +1,4 @@
 import './style.css'
-import { Terminal } from 'xterm'
-import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import hljs from 'highlight.js/lib/core'
 import json from 'highlight.js/lib/languages/json'
@@ -9,11 +7,13 @@ import ini from 'highlight.js/lib/languages/ini'
 import yaml from 'highlight.js/lib/languages/yaml'
 
 import type { ColorScheme } from './types'
-import { DEFAULT_SCHEME, MONO_FONTS, PREVIEW_CONTENT, PRESETS } from './constants'
+import { DEFAULT_SCHEME, MONO_FONTS, PRESETS } from './constants'
 import { getLuminance, getContrast, fixContrast, extractPaletteFromImage, adjustTheme } from './colorUtils'
 import { generateColorSchemeExport, generateSettingsExport } from './exportEngine'
 import { parseThemeFromString } from './importEngine'
 import { generateCoherentTheme } from './themeGenerator'
+import { ThemeState } from './themeState'
+import { TerminalApp } from './terminalApp'
 import JSZip from 'jszip'
 
 // Register HLJS languages
@@ -28,36 +28,14 @@ import "@fontsource/inter/600.css"
 import "@fontsource/jetbrains-mono/400.css"
 import "@fontsource/jetbrains-mono/700.css"
 
-let currentScheme: ColorScheme = { ...DEFAULT_SCHEME }
-const lockedColors = new Set<string>()
-const loadedFonts = new Set<string>(['JetBrains Mono', 'System Mono', 'monospace'])
+const themeState = new ThemeState()
+let terminalApp: TerminalApp
 
-// History stack
-const historyStack: ColorScheme[] = []
-const redoStack: ColorScheme[] = []
-
-function pushToHistory() {
-  historyStack.push({ ...currentScheme })
-  redoStack.length = 0 // Clear redo stack on new action
-  if (historyStack.length > 50) historyStack.shift() // Limit history
-}
-
-function undo() {
-  if (historyStack.length === 0) return
-  redoStack.push({ ...currentScheme })
-  currentScheme = historyStack.pop()!
-  applyScheme()
-}
-
-function redo() {
-  if (redoStack.length === 0) return
-  historyStack.push({ ...currentScheme })
-  currentScheme = redoStack.pop()!
-  applyScheme()
-}
+const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
 
 function applyScheme() {
-  syncBase16Mappings()
+  const currentScheme = themeState.getCurrentScheme()
+  syncBase16Mappings(currentScheme)
   Object.keys(currentScheme).forEach((key) => {
     const input = document.getElementById(key) as HTMLInputElement
     if (input) input.value = (currentScheme as any)[key]
@@ -65,9 +43,8 @@ function applyScheme() {
   updateTerminalTheme()
 }
 
-const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
-
 function syncSchemeToUrl() {
+  const currentScheme = themeState.getCurrentScheme()
   const hexValues = COLOR_KEYS.map(key => {
     let hex = (currentScheme as any)[key].replace('#', '')
     if (hex.length === 3) hex = hex.split('').map((c: string) => c + c).join('')
@@ -80,15 +57,10 @@ function syncSchemeToUrl() {
 function loadSchemeFromUrl() {
   let hash = window.location.hash.slice(1)
   if (!hash) return null
-  
-  // Handle potentially mangled hashes (e.g. starting with / or containing fragments)
   hash = hash.split('?')[0].split('/')[0].replace(/^[\/#]+/, '')
-  
-  if (hash.length < 114) return null // At least basic 19 colors
-  
+  if (hash.length < 114) return null
   const scheme: any = { ...DEFAULT_SCHEME }
   let hasValidData = false
-  
   try {
     COLOR_KEYS.forEach((key, i) => {
       const hex = hash.slice(i * 6, (i + 1) * 6)
@@ -98,22 +70,33 @@ function loadSchemeFromUrl() {
       }
     })
   } catch (e) { return null }
-  
-  return hasValidData ? scheme : null
+  return hasValidData ? scheme as ColorScheme : null
+}
+
+function syncBase16Mappings(scheme: ColorScheme) {
+  scheme.base00 = scheme.background; scheme.base01 = scheme.mantle; scheme.base02 = scheme.surface0
+  scheme.base03 = scheme.brightBlack; scheme.base04 = scheme.surface1; scheme.base05 = scheme.foreground
+  scheme.base06 = scheme.foreground; scheme.base07 = scheme.foreground; scheme.base08 = scheme.red
+  scheme.base09 = scheme.brightRed; scheme.base0A = scheme.yellow; scheme.base0B = scheme.green
+  scheme.base0C = scheme.cyan; scheme.base0D = scheme.blue; scheme.base0E = scheme.magenta
+  scheme.base0F = scheme.brightMagenta
 }
 
 window.addEventListener('hashchange', () => {
   const loaded = loadSchemeFromUrl()
   if (loaded) {
-    currentScheme = loaded
+    themeState.setScheme(loaded)
     applyScheme()
   }
 })
 
 const savedScheme = loadSchemeFromUrl()
-if (savedScheme) currentScheme = savedScheme
+if (savedScheme) {
+  themeState.setScheme(savedScheme)
+}
 
 const app = document.querySelector<HTMLDivElement>('#app')!
+const initialScheme = themeState.getCurrentScheme()
 
 app.innerHTML = `
 <aside>
@@ -125,6 +108,13 @@ app.innerHTML = `
     <button id="theme-switcher" class="theme-toggle" title="Toggle Light/Dark Mode">
       <span class="theme-icon">🌙</span>
     </button>
+  </div>
+
+  <div class="card">
+    <h3>Themes</h3>
+    <div id="community-gallery" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+      <!-- Populated by JS -->
+    </div>
   </div>
   
   <div class="card">
@@ -156,13 +146,12 @@ app.innerHTML = `
   </div>
 
   <div class="card">
-    <h3>Generator & Presets</h3>
+    <h3>Generate & Import</h3>
     <div class="control-group">
-      <select id="theme-presets">
-        <option value="">-- Built-in Presets --</option>
-        ${Object.keys(PRESETS).map(id => `<option value="${id}">${id.charAt(0).toUpperCase() + id.slice(1).replace(/([A-Z])/g, ' $1')}</option>`).join('')}
-      </select>
-      <button id="randomize" class="randomize-btn">Generate Theme</button>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button id="randomize" class="randomize-btn">Generate Theme</button>
+        <button id="invert-mode" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);" title="Switch between Dark/Light modes">🌗 Invert Mode</button>
+      </div>
       
       <div style="margin-top: 12px; border-top: 1px solid var(--border-card); padding-top: 12px;">
         <div class="control-group">
@@ -224,14 +213,6 @@ app.innerHTML = `
   </div>
 
   <div class="card">
-    <h3>Community Favorites</h3>
-    <input type="text" id="gallery-search" placeholder="Search themes..." style="font-size: 0.65rem; margin-bottom: 12px;">
-    <div id="community-gallery" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-      <!-- Populated by JS -->
-    </div>
-  </div>
-
-  <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
       <h3 style="margin: 0;">Core Palette</h3>
       <span id="contrast-badge" style="font-size: 0.65rem; font-family: var(--font-mono); font-weight: 700;">-</span>
@@ -240,17 +221,17 @@ app.innerHTML = `
       <div class="color-row">
         <div class="color-item">
           <label>BG</label>
-          <input type="color" id="background" value="${currentScheme.background}">
+          <input type="color" id="background" value="${initialScheme.background}">
           <button class="lock-btn" id="lock-background" data-id="background">🔓</button>
         </div>
         <div class="color-item">
           <label>FG</label>
-          <input type="color" id="foreground" value="${currentScheme.foreground}">
+          <input type="color" id="foreground" value="${initialScheme.foreground}">
           <button class="lock-btn" id="lock-foreground" data-id="foreground">🔓</button>
         </div>
         <div class="color-item">
           <label>Cursor</label>
-          <input type="color" id="cursor" value="${currentScheme.cursor}">
+          <input type="color" id="cursor" value="${initialScheme.cursor}">
           <button class="lock-btn" id="lock-cursor" data-id="cursor">🔓</button>
         </div>
       </div>
@@ -272,7 +253,7 @@ app.innerHTML = `
       <div class="grid-8">
         ${['mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
           .map(c => `<div class="color-item">
-            <input type="color" id="${c}" value="${(currentScheme as any)[c]}" title="${c}">
+            <input type="color" id="${c}" value="${(initialScheme as any)[c]}" title="${c}">
             <button class="lock-btn" id="lock-${c}" data-id="${c}">🔓</button>
           </div>`)
           .join('')}
@@ -286,7 +267,7 @@ app.innerHTML = `
       <div class="grid-8">
         ${['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
           .map(c => `<div class="color-item">
-            <input type="color" id="${c}" value="${(currentScheme as any)[c]}" title="${c}">
+            <input type="color" id="${c}" value="${(initialScheme as any)[c]}" title="${c}">
             <button class="lock-btn" id="lock-${c}" data-id="${c}">🔓</button>
           </div>`)
           .join('')}
@@ -294,7 +275,7 @@ app.innerHTML = `
       <div class="grid-8">
         ${['brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite']
           .map(c => `<div class="color-item">
-            <input type="color" id="${c}" value="${(currentScheme as any)[c]}" title="${c}">
+            <input type="color" id="${c}" value="${(initialScheme as any)[c]}" title="${c}">
             <button class="lock-btn" id="lock-${c}" data-id="${c}">🔓</button>
           </div>`)
           .join('')}
@@ -373,19 +354,15 @@ app.innerHTML = `
 </aside>
 `
 
-// Populate Community Gallery
 const gallery = document.getElementById('community-gallery')!
-const featured = ['synthwave', 'nord', 'gruvbox', 'tokyoNight', 'catppuccin', 'monokai', 'solarizedDark']
 
 function loadLocalThemes() {
   const container = document.getElementById('local-themes')!
   const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
-  
   if (saved.length === 0) {
     container.innerHTML = '<p style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.5;">No themes saved yet</p>'
     return
   }
-
   container.innerHTML = saved.map((t: any, i: number) => `
     <div class="local-theme-row" style="display: flex; gap: 8px; align-items: center;">
       <div class="gallery-item" data-idx="${i}" style="flex: 1; display: flex; align-items: center; gap: 8px;">
@@ -395,16 +372,13 @@ function loadLocalThemes() {
       <button class="delete-local" data-idx="${i}" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.7rem;">✕</button>
     </div>
   `).join('')
-
   container.querySelectorAll('.gallery-item').forEach(item => {
     item.addEventListener('click', () => {
       const idx = parseInt(item.getAttribute('data-idx')!)
-      pushToHistory()
-      currentScheme = { ...saved[idx].scheme }
+      themeState.setScheme(saved[idx].scheme)
       applyScheme()
     })
   })
-
   container.querySelectorAll('.delete-local').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const idx = parseInt((e.currentTarget as HTMLButtonElement).getAttribute('data-idx')!)
@@ -416,16 +390,18 @@ function loadLocalThemes() {
   })
 }
 
-gallery.innerHTML = featured.map(id => {
+gallery.innerHTML = Object.keys(PRESETS).map(id => {
   const p = PRESETS[id]
+  const name = id.charAt(0).toUpperCase() + id.slice(1).replace(/([A-Z])/g, ' $1')
   return `
-    <div class="gallery-item" data-id="${id}" title="${id}">
+    <div class="gallery-item" data-id="${id}" title="${name}">
       <div style="background: ${p.background}; width: 100%; height: 20px; border-radius: 4px; display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; border: 1px solid var(--border-card);">
         <div style="background: ${p.red}"></div>
         <div style="background: ${p.green}"></div>
         <div style="background: ${p.blue}"></div>
         <div style="background: ${p.magenta}"></div>
       </div>
+      <span class="gallery-name">${name}</span>
     </div>
   `
 }).join('')
@@ -433,97 +409,16 @@ gallery.innerHTML = featured.map(id => {
 gallery.querySelectorAll('.gallery-item').forEach(item => {
   item.addEventListener('click', () => {
     const id = item.getAttribute('data-id')!
-    pushToHistory()
-    currentScheme = { ...currentScheme, ...PRESETS[id] }
+    const preset = PRESETS[id]
+    const newScheme = generateCoherentTheme({ ...themeState.getCurrentScheme(), ...preset }, new Set(Object.keys(preset)))
+    themeState.setScheme(newScheme)
     applyScheme()
   })
 })
 
-const term = new Terminal({
-  fontFamily: '"JetBrains Mono", monospace',
-  fontSize: 13,
-  lineHeight: 1.2,
-  allowTransparency: true,
-  cursorBlink: true,
-})
-
-const fitAddon = new FitAddon()
-term.loadAddon(fitAddon)
-term.open(document.getElementById('terminal')!)
-fitAddon.fit()
-
-let currentLine = ''
-term.onData(e => {
-  switch (e) {
-    case '\r': // Enter
-      const cmd = currentLine.trim().toLowerCase()
-      term.write('\r\n')
-      if (cmd === 'ls') (PREVIEW_CONTENT as any).ls(term)
-      else if (cmd === 'help') term.writeln('  Available commands: ls, git, htop, neofetch, clear')
-      else if (cmd === 'git') (PREVIEW_CONTENT as any).git(term)
-      else if (cmd === 'htop') (PREVIEW_CONTENT as any).htop(term)
-      else if (cmd === 'neofetch') (PREVIEW_CONTENT as any).neofetch(term)
-      else if (cmd === 'clear') term.clear()
-      else if (cmd) term.writeln(`  command not found: ${cmd}`)
-      
-      term.write('\r\n\x1b[36muser@colorterm\x1b[0m:\x1b[34m~\x1b[0m$ ')
-      currentLine = ''
-      break
-    case '\u007F': // Backspace
-      if (currentLine.length > 0) {
-        currentLine = currentLine.slice(0, -1)
-        term.write('\b \b')
-      }
-      break
-    default:
-      if (e >= String.fromCharCode(0x20) && e <= String.fromCharCode(0x7B)) {
-        currentLine += e
-        term.write(e)
-      }
-  }
-})
-
-function loadGoogleFont(fontName: string) {
-  if (!fontName || loadedFonts.has(fontName)) return
-  const link = document.createElement('link')
-  link.rel = 'stylesheet'
-  link.href = `https://fonts.googleapis.com/css?family=${fontName.replace(/ /g, '+')}:400,700&display=swap`
-  link.onload = () => {
-    if (document.fonts) {
-      document.fonts.load(`13px '${fontName}'`).then(() => {
-        requestAnimationFrame(() => {
-          fitAddon.fit()
-          term.refresh(0, term.rows - 1)
-        })
-      })
-    }
-  }
-  document.head.appendChild(link)
-  loadedFonts.add(fontName)
-}
-
-MONO_FONTS.forEach(f => {
-  if (f.name !== 'JetBrains Mono' && f.family !== 'monospace') loadGoogleFont(f.name)
-})
-
-function updateTerminalContainerBackground() {
-  const container = document.getElementById('terminal')!
-  const opacity = (document.getElementById('term-opacity') as HTMLInputElement).value
-  let bg = currentScheme.background
-  
-  // Robust hex to RGB
-  if (bg.length === 4) {
-    bg = '#' + bg[1] + bg[1] + bg[2] + bg[2] + bg[3] + bg[3]
-  }
-  const r = parseInt(bg.slice(1, 3), 16)
-  const g = parseInt(bg.slice(3, 5), 16)
-  const b = parseInt(bg.slice(5, 7), 16)
-  
-  container.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`
-}
-
 function updateVariants() {
   const container = document.getElementById('variants-grid')!
+  const baseScheme = themeState.getBaseScheme()
   const variants = [
     { name: 'Default', fn: (s: ColorScheme) => s },
     { name: 'Deep', fn: (s: ColorScheme) => adjustTheme(s, 0, 1.0, 0.6) },
@@ -532,9 +427,8 @@ function updateVariants() {
     { name: 'Contrast', fn: (s: ColorScheme) => adjustTheme(s, 0, 1.0, 1.2) },
     { name: 'Soft', fn: (s: ColorScheme) => adjustTheme(s, 0, 0.8, 0.8) },
   ]
-  
   container.innerHTML = variants.map((v, i) => {
-    const s = v.fn(currentScheme)
+    const s = v.fn(baseScheme)
     return `
       <div class="variant-item" data-idx="${i}" style="cursor: pointer; background: ${s.background}; border: 1px solid var(--border-card); border-radius: 6px; padding: 12px; transition: transform 0.1s;">
         <div style="font-size: 0.6rem; color: ${s.foreground}; text-align: center; font-weight: 600; margin-bottom: 8px;">${v.name}</div>
@@ -547,43 +441,29 @@ function updateVariants() {
       </div>
     `
   }).join('')
-  
   container.querySelectorAll('.variant-item').forEach(item => {
     item.addEventListener('click', () => {
       const idx = parseInt(item.getAttribute('data-idx')!)
-      pushToHistory()
-      currentScheme = variants[idx].fn(currentScheme)
+      themeState.applyVariant(variants[idx].fn)
       applyScheme()
     })
   })
 }
 
 function updateTerminalTheme() {
-  // Update CSS variables for Highlight.js and other dynamic UI elements
+  const currentScheme = themeState.getCurrentScheme()
   Object.entries(currentScheme).forEach(([key, value]) => {
     document.documentElement.style.setProperty(`--term-${key}`, value)
   })
-
   const opacity = parseFloat((document.getElementById('term-opacity') as HTMLInputElement).value)
-  updateTerminalContainerBackground()
-  
-  const theme = { ...currentScheme }
-  // If opacity is less than 1, we set xterm background to transparent
-  // and let the .terminal-container handle the semi-transparent background
-  if (opacity < 1) {
-    theme.background = 'rgba(0,0,0,0)'
-  }
-  term.options.theme = theme
-  
+  if (terminalApp) terminalApp.updateTheme(currentScheme, opacity)
   const ratio = getContrast(currentScheme.background, currentScheme.foreground)
   const badge = document.getElementById('contrast-badge')!
   let status = 'Fail', color = '#ff4c4c'
   if (ratio >= 7) { status = 'AAA'; color = '#23d18b' }
   else if (ratio >= 4.5) { status = 'AA'; color = '#23d18b' }
   else if (ratio >= 3) { status = 'Large'; color = '#f5f543' }
-  badge.textContent = `${ratio.toFixed(2)}:1 (${status})`
-  badge.style.color = color
-
+  badge.textContent = `${ratio.toFixed(2)}:1 (${status})`; badge.style.color = color
   const heatmap = document.getElementById('contrast-grid')!
   const ansiColors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite']
   heatmap.innerHTML = ansiColors.map(c => {
@@ -592,16 +472,11 @@ function updateTerminalTheme() {
     const pass = r >= 4.5, largePass = r >= 3, icon = pass ? '✓' : (largePass ? '○' : '✕')
     return `<div class="contrast-box" style="background: ${col}; color: ${getLuminance(col) > 0.5 ? '#000' : '#fff'}" title="${c}: ${r.toFixed(2)}:1" data-id="${c}">${icon}</div>`
   }).join('')
-
-  // Add heatmap interaction
   heatmap.querySelectorAll('.contrast-box').forEach(box => {
     box.addEventListener('click', () => {
-      const id = box.getAttribute('data-id')!
-      const input = document.getElementById(id) as HTMLInputElement
-      input.click()
+      const id = box.getAttribute('data-id')!; const input = document.getElementById(id) as HTMLInputElement; input.click()
     })
   })
-
   const format = (document.getElementById('export-format') as HTMLSelectElement).value
   const outputEl = document.getElementById('export-output')!, settingsEl = document.getElementById('export-settings')!
   let lang = (format === 'neovim' || format === 'wezterm') ? 'lua' : (['ghostty', 'kitty', 'foot', 'alacritty'].includes(format) ? 'ini' : 'json')
@@ -609,355 +484,134 @@ function updateTerminalTheme() {
   outputEl.removeAttribute('data-highlighted'); settingsEl.removeAttribute('data-highlighted')
   outputEl.textContent = generateColorSchemeExport(format, currentScheme)
   settingsEl.textContent = generateSettingsExport(format)
-  syncSchemeToUrl()
-  updateVariants()
+  syncSchemeToUrl(); updateVariants()
   hljs.highlightElement(outputEl); hljs.highlightElement(settingsEl)
 }
 
-function writeSampleText() {
-  const mode = (document.getElementById('preview-mode') as HTMLSelectElement)?.value || 'react'
-  term.clear(); term.writeln('  \x1b[1mTerminal Color Scheme Preview\x1b[0m\r\n')
-  term.write('  '); [30, 31, 32, 33, 34, 35, 36, 37].forEach(c => term.write(`\x1b[${c}m████\x1b[0m `)); term.writeln(' (Normal)')
-  term.write('  '); [30, 31, 32, 33, 34, 35, 36, 37].forEach(c => term.write(`\x1b[${c};1m████\x1b[0m `)); term.writeln(' (Bright)\r\n')
-  ;(PREVIEW_CONTENT as any)[mode](term)
-  term.write('\r\n\x1b[36muser@colorterm\x1b[0m:\x1b[34m~\x1b[0m$ ')
-}
-
-// Initial update
+terminalApp = new TerminalApp('terminal')
 applyScheme()
-writeSampleText()
+terminalApp.writeSample((document.getElementById('preview-mode') as HTMLSelectElement).value)
 
-// Listeners
 document.querySelectorAll('.lock-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     const target = e.currentTarget as HTMLButtonElement, id = target.getAttribute('data-id')!
-    if (lockedColors.has(id)) { lockedColors.delete(id); target.textContent = '🔓' }
-    else { lockedColors.add(id); target.textContent = '🔒' }
+    const isLocked = themeState.toggleLock(id)
+    target.textContent = isLocked ? '🔒' : '🔓'; target.classList.toggle('locked', isLocked)
   })
 })
-
-function syncBase16Mappings() {
-  currentScheme.base00 = currentScheme.background
-  currentScheme.base01 = currentScheme.mantle
-  currentScheme.base02 = currentScheme.surface0
-  currentScheme.base03 = currentScheme.brightBlack
-  currentScheme.base04 = currentScheme.surface1
-  currentScheme.base05 = currentScheme.foreground
-  currentScheme.base06 = currentScheme.foreground
-  currentScheme.base07 = currentScheme.foreground
-  currentScheme.base08 = currentScheme.red
-  currentScheme.base09 = currentScheme.brightRed
-  currentScheme.base0A = currentScheme.yellow
-  currentScheme.base0B = currentScheme.green
-  currentScheme.base0C = currentScheme.cyan
-  currentScheme.base0D = currentScheme.blue
-  currentScheme.base0E = currentScheme.magenta
-  currentScheme.base0F = currentScheme.brightMagenta
-}
 
 document.querySelectorAll('input[type="color"]').forEach((input) => {
   input.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement
-    (currentScheme as any)[target.id] = target.value
-    syncBase16Mappings()
-    updateTerminalTheme()
-  })
-  input.addEventListener('change', () => {
-    pushToHistory()
+    themeState.updateCurrentColor(target.id, target.value); applyScheme()
   })
 })
 
-document.getElementById('theme-presets')!.addEventListener('change', (e) => {
-  const presetId = (e.target as HTMLSelectElement).value
-  if (presetId && PRESETS[presetId]) {
-    pushToHistory()
-    currentScheme = { ...currentScheme, ...PRESETS[presetId] }
-    applyScheme()
-  }
-})
-
-document.getElementById('randomize')!.addEventListener('click', () => {
-  pushToHistory()
-  currentScheme = generateCoherentTheme(currentScheme, lockedColors)
-  applyScheme()
-})
-
-document.getElementById('trigger-image')!.addEventListener('click', () => {
-  document.getElementById('image-upload')!.click()
-})
-
-document.getElementById('trigger-wallpaper')!.addEventListener('click', () => {
-  document.getElementById('wallpaper-upload')!.click()
-})
-
+document.getElementById('randomize')!.addEventListener('click', () => { themeState.randomize(); applyScheme() })
+document.getElementById('invert-mode')!.addEventListener('click', () => { themeState.invert(); applyScheme() })
+document.getElementById('trigger-image')!.addEventListener('click', () => { document.getElementById('image-upload')!.click() })
+document.getElementById('trigger-wallpaper')!.addEventListener('click', () => { document.getElementById('wallpaper-upload')!.click() })
 document.getElementById('wallpaper-upload')!.addEventListener('change', (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    document.querySelector('main')!.style.backgroundImage = `url(${e.target?.result})`
-    document.querySelector('main')!.style.backgroundSize = 'cover'
-    document.querySelector('main')!.style.backgroundPosition = 'center'
-  }
-  reader.readAsDataURL(file)
+  const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
+  const reader = new FileReader(); reader.onload = (e) => {
+    const main = document.querySelector('main')!; main.style.backgroundImage = `url(${e.target?.result})`; main.style.backgroundSize = 'cover'; main.style.backgroundPosition = 'center'
+  }; reader.readAsDataURL(file)
 })
-
-document.getElementById('gallery-search')!.addEventListener('input', (e) => {
-  const term = (e.target as HTMLInputElement).value.toLowerCase()
-  const items = document.querySelectorAll('.gallery-item[data-id]')
-  items.forEach(item => {
-    const id = item.getAttribute('data-id')!.toLowerCase()
-    ;(item as HTMLElement).style.display = id.includes(term) ? 'block' : 'none'
-  })
-})
-
 document.getElementById('image-upload')!.addEventListener('change', async (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  
+  const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return
   try {
     const extracted = await extractPaletteFromImage(file)
-    pushToHistory()
-    currentScheme = { ...currentScheme, ...extracted }
-    applyScheme()
+    themeState.setScheme({ ...themeState.getCurrentScheme(), ...extracted }); applyScheme()
   } catch (err) { alert('Image processing failed') }
 })
-
-document.getElementById('undo-btn')!.addEventListener('click', () => undo())
-document.getElementById('redo-btn')!.addEventListener('click', () => redo())
-
-// Keyboard shortcuts for Undo/Redo
+document.getElementById('undo-btn')!.addEventListener('click', () => { if (themeState.undo()) applyScheme() })
+document.getElementById('redo-btn')!.addEventListener('click', () => { if (themeState.redo()) applyScheme() })
 window.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    if (e.shiftKey) redo()
-    else undo()
-    e.preventDefault()
-  } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-    redo()
-    e.preventDefault()
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { if (e.shiftKey) { if (themeState.redo()) applyScheme() } else { if (themeState.undo()) applyScheme() } e.preventDefault() }
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'y') { if (themeState.redo()) applyScheme(); e.preventDefault() }
 })
-
 document.getElementById('fix-contrast')!.addEventListener('click', () => {
   const targetRatio = parseFloat((document.getElementById('target-contrast') as HTMLSelectElement).value)
-  pushToHistory()
-  fixContrast(currentScheme, lockedColors, targetRatio, (newScheme) => {
-    currentScheme = newScheme
-    applyScheme()
-  })
+  fixContrast(themeState.getCurrentScheme(), themeState.getLockedColors(), targetRatio, (newScheme) => { themeState.setScheme(newScheme); applyScheme() })
 })
 
 async function copyToClipboard(text: string, btn: HTMLButtonElement) {
   const originalText = btn.textContent
   try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      // Fallback for non-secure contexts
-      const textArea = document.createElement("textarea")
-      textArea.value = text
-      textArea.style.position = "fixed"
-      textArea.style.left = "-9999px"
-      textArea.style.top = "0"
-      document.body.appendChild(textArea)
-      textArea.focus()
-      textArea.select()
-      document.execCommand('copy')
-      textArea.remove()
+    if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text)
+    else {
+      const textArea = document.createElement("textarea"); textArea.value = text; textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.style.top = "0";
+      document.body.appendChild(textArea); textArea.focus(); textArea.select(); document.execCommand('copy'); textArea.remove()
     }
     btn.textContent = 'Copied! ✓'
-    console.log('Copied to clipboard successfully')
-  } catch (err) {
-    console.error('Failed to copy:', err)
-    btn.textContent = 'Error! ✕'
-  }
+  } catch (err) { btn.textContent = 'Error! ✕' }
   setTimeout(() => btn.textContent = originalText, 2000)
 }
 
-document.getElementById('share-link')!.addEventListener('click', (e) => {
-  const btn = e.currentTarget as HTMLButtonElement
-  copyToClipboard(window.location.href, btn)
-})
-
-document.getElementById('copy-export')!.addEventListener('click', (e) => {
-  const btn = e.currentTarget as HTMLButtonElement
-  const text = document.getElementById('export-output')!.textContent || ''
-  copyToClipboard(text, btn)
-})
-
-document.getElementById('copy-settings')!.addEventListener('click', (e) => {
-  const btn = e.currentTarget as HTMLButtonElement
-  const text = document.getElementById('export-settings')!.textContent || ''
-  copyToClipboard(text, btn)
-})
-
-document.getElementById('import-btn')!.addEventListener('click', () => {
-  const area = document.getElementById('import-area')!
-  area.style.display = area.style.display === 'none' ? 'block' : 'none'
-})
-
+document.getElementById('share-link')!.addEventListener('click', (e) => copyToClipboard(window.location.href, e.currentTarget as HTMLButtonElement))
+document.getElementById('copy-export')!.addEventListener('click', (e) => copyToClipboard(document.getElementById('export-output')!.textContent || '', e.currentTarget as HTMLButtonElement))
+document.getElementById('copy-settings')!.addEventListener('click', (e) => copyToClipboard(document.getElementById('export-settings')!.textContent || '', e.currentTarget as HTMLButtonElement))
+document.getElementById('import-btn')!.addEventListener('click', () => { const area = document.getElementById('import-area')!; area.style.display = area.style.display === 'none' ? 'block' : 'none' })
 document.getElementById('import-apply')!.addEventListener('click', () => {
   const textarea = document.getElementById('import-json') as HTMLTextAreaElement
   try {
-    const imported = parseThemeFromString(textarea.value)
-    if (!imported) throw new Error('Could not detect theme format. Please ensure you include at least background and foreground colors.')
-    
-    pushToHistory()
-    currentScheme = { ...currentScheme, ...imported }
-    applyScheme()
-    textarea.value = ''
-    document.getElementById('import-area')!.style.display = 'none'
-    alert('Theme imported successfully!')
-  } catch (err: any) { 
-    alert(`Import failed: ${err.message}`) 
-  }
+    const imported = parseThemeFromString(textarea.value); if (!imported) throw new Error('Could not detect theme format.')
+    themeState.setScheme({ ...themeState.getCurrentScheme(), ...imported }); applyScheme()
+    textarea.value = ''; document.getElementById('import-area')!.style.display = 'none'; alert('Theme imported successfully!')
+  } catch (err: any) { alert(`Import failed: ${err.message}`) }
 })
-
-// New Feature Listeners
 document.getElementById('save-local')!.addEventListener('click', () => {
-  const name = prompt('Theme name?') || 'My Theme'
-  const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
-  saved.push({ name, scheme: { ...currentScheme } })
-  localStorage.setItem('my-themes', JSON.stringify(saved))
-  loadLocalThemes()
+  const name = prompt('Theme name?') || 'My Theme'; const saved = JSON.parse(localStorage.getItem('my-themes') || '[]'); saved.push({ name, scheme: themeState.getCurrentScheme() });
+  localStorage.setItem('my-themes', JSON.stringify(saved)); loadLocalThemes()
 })
-
 document.getElementById('vision-mode')!.addEventListener('change', (e) => {
-  const mode = (e.target as HTMLSelectElement).value
-  const main = document.querySelector('main')!
-  const codePre = document.getElementById('export-output')!.parentElement!
-  const settingsPre = document.getElementById('export-settings')!.parentElement!
+  const mode = (e.target as HTMLSelectElement).value;
+  const aside = document.querySelector('aside')!;
+  const main = document.querySelector('main')!;
+  const terminal = document.getElementById('terminal')!;
   
-  const applyFilter = (el: HTMLElement) => {
-    el.style.filter = mode === 'none' ? '' : `url(#${mode})`
+  const filterVal = mode === 'none' ? '' : `url(#${mode})`;
+  aside.style.filter = filterVal;
+  main.style.filter = filterVal;
+  
+  // Disable backdrop-filter on terminal when vision mode is on to prevent clashing
+  if (mode !== 'none') {
+    terminal.style.backdropFilter = 'none';
+  } else {
+    terminal.style.backdropFilter = 'blur(10px)';
   }
-  
-  applyFilter(main)
-  applyFilter(codePre)
-  applyFilter(settingsPre)
 })
-
 const handleAdjust = () => {
-  const h = parseInt((document.getElementById('adjust-hue') as HTMLInputElement).value)
-  const s = parseFloat((document.getElementById('adjust-sat') as HTMLInputElement).value)
-  const b = parseFloat((document.getElementById('adjust-bri') as HTMLInputElement).value)
-  
-  // We use the last state for continuous adjustments
-  const newScheme = adjustTheme(currentScheme, h, s, b)
-  term.options.theme = { ...newScheme }
-  Object.entries(newScheme).forEach(([key, value]) => {
-    document.documentElement.style.setProperty(`--term-${key}`, value)
-  })
+  const h = parseInt((document.getElementById('adjust-hue') as HTMLInputElement).value); const s = parseFloat((document.getElementById('adjust-sat') as HTMLInputElement).value); const b = parseFloat((document.getElementById('adjust-bri') as HTMLInputElement).value)
+  const newScheme = adjustTheme(themeState.getCurrentScheme(), h, s, b); if (terminalApp) terminalApp.updateTheme(newScheme, parseFloat((document.getElementById('term-opacity') as HTMLInputElement).value))
+  Object.entries(newScheme).forEach(([key, value]) => { document.documentElement.style.setProperty(`--term-${key}`, value) })
 }
-
-// Reset sliders and push to history on finish
 const finishAdjust = () => {
-  pushToHistory()
-  const h = parseInt((document.getElementById('adjust-hue') as HTMLInputElement).value)
-  const s = parseFloat((document.getElementById('adjust-sat') as HTMLInputElement).value)
-  const b = parseFloat((document.getElementById('adjust-bri') as HTMLInputElement).value)
-  currentScheme = adjustTheme(currentScheme, h, s, b)
-  
-  // Reset UI sliders
-  ;(document.getElementById('adjust-hue') as HTMLInputElement).value = "0"
-  ;(document.getElementById('adjust-sat') as HTMLInputElement).value = "1"
-  ;(document.getElementById('adjust-bri') as HTMLInputElement).value = "1"
-  
-  applyScheme()
+  const h = parseInt((document.getElementById('adjust-hue') as HTMLInputElement).value); const s = parseFloat((document.getElementById('adjust-sat') as HTMLInputElement).value); const b = parseFloat((document.getElementById('adjust-bri') as HTMLInputElement).value)
+  const newScheme = adjustTheme(themeState.getCurrentScheme(), h, s, b); themeState.setScheme(newScheme)
+  ;(document.getElementById('adjust-hue') as HTMLInputElement).value = "0"; (document.getElementById('adjust-sat') as HTMLInputElement).value = "1"; (document.getElementById('adjust-bri') as HTMLInputElement).value = "1"; applyScheme()
 }
-
-document.getElementById('adjust-hue')!.addEventListener('input', handleAdjust)
-document.getElementById('adjust-sat')!.addEventListener('input', handleAdjust)
-document.getElementById('adjust-bri')!.addEventListener('input', handleAdjust)
-
-document.getElementById('adjust-hue')!.addEventListener('change', finishAdjust)
-document.getElementById('adjust-sat')!.addEventListener('change', finishAdjust)
-document.getElementById('adjust-bri')!.addEventListener('change', finishAdjust)
-
+document.getElementById('adjust-hue')!.addEventListener('input', handleAdjust); document.getElementById('adjust-sat')!.addEventListener('input', handleAdjust); document.getElementById('adjust-bri')!.addEventListener('input', handleAdjust)
+document.getElementById('adjust-hue')!.addEventListener('change', finishAdjust); document.getElementById('adjust-sat')!.addEventListener('change', finishAdjust); document.getElementById('adjust-bri')!.addEventListener('change', finishAdjust)
 document.getElementById('batch-export')!.addEventListener('click', async (e) => {
-  const btn = e.currentTarget as HTMLButtonElement
-  const originalText = btn.textContent
-  btn.textContent = '📦 Generating ZIP...'
-  btn.disabled = true
-
+  const btn = e.currentTarget as HTMLButtonElement; const originalText = btn.textContent; btn.textContent = '📦 Generating ZIP...'; btn.disabled = true
+  const currentScheme = themeState.getCurrentScheme()
   try {
-    const zip = new JSZip()
-    const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16']
-    
+    const zip = new JSZip(); const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16']
     formats.forEach(f => {
-      let ext = 'conf'
-      if (f === 'iterm2') ext = 'itermcolors'
-      else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'
-      else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'
-      else if (f === 'foot') ext = 'ini'
-      else if (['vscode', 'windowsterminal', 'xterm', 'tailwind'].includes(f)) ext = 'json'
-      else if (f === 'css') ext = 'css'
-      else if (f === 'base16') ext = 'yaml'
-      else if (f === 'nix') ext = 'nix'
-
+      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'
       zip.file(`${f}/theme.${ext}`, generateColorSchemeExport(f, currentScheme))
-      // Settings only for relevant formats
-      const settings = generateSettingsExport(f)
-      if (settings && !settings.startsWith('# Settings not supported')) {
-        zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : ext}`, settings)
-      }
+      const settings = generateSettingsExport(f); if (settings && !settings.startsWith('# Settings not supported')) zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : ext}`, settings)
     })
-
-    const content = await zip.generateAsync({ type: 'blob' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(content)
-    link.download = 'colorterm-bundle.zip'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  } catch (err) {
-    console.error('ZIP generation failed:', err)
-    alert('Failed to generate ZIP file')
-  } finally {
-    btn.textContent = originalText
-    btn.disabled = false
-  }
+    const content = await zip.generateAsync({ type: 'blob' }); const link = document.createElement('a'); link.href = URL.createObjectURL(content); link.download = 'colorterm-bundle.zip'; document.body.appendChild(link); link.click(); document.body.removeChild(link)
+  } catch (err) { alert('Failed to generate ZIP file') } finally { btn.textContent = originalText; btn.disabled = false }
 })
-
 loadLocalThemes()
-
 document.getElementById('export-format')!.addEventListener('change', () => updateTerminalTheme())
-document.getElementById('preview-mode')!.addEventListener('change', () => writeSampleText())
-
-document.getElementById('term-font')!.addEventListener('change', (e) => {
-  const select = e.target as HTMLSelectElement
-  const fontName = select.selectedOptions[0].text
-  if (select.value !== 'monospace' && fontName !== 'JetBrains Mono') loadGoogleFont(fontName)
-  term.options.fontFamily = select.value + ', monospace'
-  updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
-})
-
-document.getElementById('term-opacity')!.addEventListener('input', () => {
-  updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
-})
-
-document.getElementById('term-size')!.addEventListener('input', (e) => {
-  term.options.fontSize = parseInt((e.target as HTMLInputElement).value)
-  updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
-})
-
-document.getElementById('term-letter-spacing')!.addEventListener('input', (e) => {
-  term.options.letterSpacing = parseFloat((e.target as HTMLInputElement).value)
-  updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
-})
-
-const themeSwitcher = document.getElementById('theme-switcher')!
-let isAppDarkMode = true
-themeSwitcher.addEventListener('click', () => {
-  isAppDarkMode = !isAppDarkMode
-  document.documentElement.setAttribute('data-theme', isAppDarkMode ? 'dark' : 'light')
-  themeSwitcher.querySelector('.theme-icon')!.textContent = isAppDarkMode ? '🌙' : '☀️'
-})
-
-window.addEventListener('resize', () => requestAnimationFrame(() => fitAddon.fit()))
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
-  });
-}
+document.getElementById('preview-mode')!.addEventListener('change', () => terminalApp?.writeSample((document.getElementById('preview-mode') as HTMLSelectElement).value))
+document.getElementById('term-font')!.addEventListener('change', (e) => { const select = e.target as HTMLSelectElement; terminalApp?.setFont(select.value, select.selectedOptions[0].text) })
+document.getElementById('term-opacity')!.addEventListener('input', () => updateTerminalTheme())
+document.getElementById('term-size')!.addEventListener('input', (e) => { if (terminalApp) terminalApp.term.options.fontSize = parseInt((e.target as HTMLInputElement).value) })
+document.getElementById('term-letter-spacing')!.addEventListener('input', (e) => { if (terminalApp) terminalApp.term.options.letterSpacing = parseFloat((e.target as HTMLInputElement).value) })
+const themeSwitcher = document.getElementById('theme-switcher')!; let isAppDarkMode = true; themeSwitcher.addEventListener('click', () => { isAppDarkMode = !isAppDarkMode; document.documentElement.setAttribute('data-theme', isAppDarkMode ? 'dark' : 'light'); themeSwitcher.querySelector('.theme-icon')!.textContent = isAppDarkMode ? '🌙' : '☀️' })
+if ('serviceWorker' in navigator) window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err)) })
