@@ -55,13 +55,14 @@ export function generateColorSchemeExport(format: string, scheme: ColorScheme): 
   bright_white = "${scheme.brightWhite}",
 }
 
-vim.api.nvim_command("hi clear")
-if vim.fn.exists("syntax_on") then
-  vim.api.nvim_command("syntax reset")
-end
 vim.o.termguicolors = true
-vim.g.colors_name = "colorterm_theme"
+vim.g.colors_name = "colorterm"
 vim.o.background = "dark"
+
+vim.cmd("hi clear")
+if vim.fn.exists("syntax_on") then
+    vim.cmd("syntax reset")
+end
 
 local hl = function(group, opts)
   vim.api.nvim_set_hl(0, group, opts)
@@ -656,12 +657,11 @@ font_name: "${font}"`
         backgroundOpacity: parseFloat(opacity)
       }, null, 2)
     case 'neovim':
-      return `-- Place this in ~/.config/nvim/colors/mytheme.lua
--- Use with: :colorscheme mytheme
+      return `-- 1. Save the Palette code as: ~/.config/nvim/colors/colorterm.lua
+-- 2. Add these lines to your ~/.config/nvim/init.lua:
 
 vim.o.termguicolors = true
-vim.o.background = "dark"
-vim.o.guifont = "${font}:h${size}"`
+vim.cmd("colorscheme colorterm")`
     default:
       return '# Settings not supported for this format'
   }
