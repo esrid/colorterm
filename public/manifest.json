@@ -1,0 +1,17 @@
+{
+  "name": "ColorTerm",
+  "short_name": "ColorTerm",
+  "description": "Interactive terminal theme generator",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#7c7cf0",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

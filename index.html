@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ColorTerm — Interactive Terminal Theme Generator</title>
+    <meta name="description" content="Generate, customize, and export beautiful terminal color schemes. Supports Ghostty, Kitty, Alacritty, iTerm2, and more with real-time accessibility auditing." />
+    <meta name="keywords" content="terminal theme, color scheme, ghostty theme, kitty theme, alacritty, xterm.js, color generator, accessibility, wcag" />
+    
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ColorTerm — Interactive Terminal Theme Generator" />
+    <meta property="og:description" content="Generate and export beautiful terminal themes with real-time accessibility auditing." />
+    <meta property="og:image" content="/assets/hero.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+
+    <!-- Vision Simulation Filters -->
+    <svg style="display: none;">
+      <filter id="protanopia">
+        <feColorMatrix type="matrix" values="0.567, 0.433, 0, 0, 0, 0.558, 0.442, 0, 0, 0, 0, 0.242, 0.758, 0, 0, 0, 0, 0, 1, 0"/>
+      </filter>
+      <filter id="deuteranopia">
+        <feColorMatrix type="matrix" values="0.625, 0.375, 0, 0, 0, 0.7, 0.3, 0, 0, 0, 0, 0.3, 0.7, 0, 0, 0, 0, 0, 1, 0"/>
+      </filter>
+      <filter id="tritanopia">
+        <feColorMatrix type="matrix" values="0.95, 0.05, 0, 0, 0, 0, 0.433, 0.567, 0, 0, 0, 0.475, 0.525, 0, 0, 0, 0, 0, 1, 0"/>
+      </filter>
+      <filter id="achromatopsia">
+        <feColorMatrix type="matrix" values="0.299, 0.587, 0.114, 0, 0, 0.299, 0.587, 0.114, 0, 0, 0.299, 0.587, 0.114, 0, 0, 0, 0, 0, 1, 0"/>
+      </filter>
+    </svg>
+  </body>
+</html>
