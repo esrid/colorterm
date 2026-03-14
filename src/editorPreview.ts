@@ -25,7 +25,7 @@ export class EditorPreview {
           basicSetup,
           this.themeCompartment.of([]),
           this.languageCompartment.of(javascript()),
-          EditorView.editable.of(false),
+          EditorView.editable.of(true),
           EditorView.theme({
             '&': { height: '100%', fontSize: '14px' },
             '.cm-scroller': { fontFamily: '"JetBrains Mono", monospace' },
