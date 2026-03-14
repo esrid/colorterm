@@ -843,6 +843,39 @@ document.getElementById('preview-card')!.addEventListener('click', () => {
   ctx.fillStyle = currentScheme.primary
   ctx.font = '24px "JetBrains Mono"'
   ctx.fillText('colorterm.fly.dev', 60, 595)
+
+  // Mock Terminal Window in the middle
+  const winX = 60, winY = 320, winW = 1080, winH = 200
+  ctx.fillStyle = currentScheme.mantle
+  ctx.beginPath()
+  ctx.roundRect(winX, winY, winW, winH, 12)
+  ctx.fill()
+  ctx.strokeStyle = currentScheme.surface2
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  // Window Dots
+  const dots = ['#ff5f56', '#ffbd2e', '#27c93f']
+  dots.forEach((dot, i) => {
+    ctx.fillStyle = dot
+    ctx.beginPath()
+    ctx.arc(winX + 25 + (i * 20), winY + 20, 6, 0, Math.PI * 2)
+    ctx.fill()
+  })
+
+  // Mock Code Lines
+  const codeColors = [currentScheme.magenta, currentScheme.blue, currentScheme.green, currentScheme.yellow, currentScheme.cyan]
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = codeColors[i % codeColors.length]
+    ctx.beginPath()
+    ctx.roundRect(winX + 25, winY + 50 + (i * 25), 100 + Math.random() * 400, 12, 4)
+    ctx.fill()
+    // Second part of line
+    ctx.fillStyle = currentScheme.surface2
+    ctx.beginPath()
+    ctx.roundRect(winX + 150 + Math.random() * 400, winY + 50 + (i * 25), 50 + Math.random() * 200, 12, 4)
+    ctx.fill()
+  }
   
   const link = document.createElement('a')
   link.download = 'colorterm-preview.png'
