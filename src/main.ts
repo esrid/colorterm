@@ -783,25 +783,49 @@ document.getElementById('adjust-hue')!.addEventListener('change', finishAdjust)
 document.getElementById('adjust-sat')!.addEventListener('change', finishAdjust)
 document.getElementById('adjust-bri')!.addEventListener('change', finishAdjust)
 
-document.getElementById('batch-export')!.addEventListener('click', async () => {
-  const zip = new JSZip()
-  const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix']
-  
-  formats.forEach(f => {
-    const ext = f === 'iterm2' ? 'itermcolors' : (['neovim', 'wezterm', 'nix'].includes(f) ? 'lua' : (['alacritty', 'helix', 'zellij'].includes(f) ? 'toml' : (['foot'].includes(f) ? 'ini' : (['vscode', 'windowsterminal', 'xterm'].includes(f) ? 'json' : 'conf'))))
-    if (f === 'nix') {
-      zip.file(`theme.nix`, generateColorSchemeExport(f, currentScheme))
-    } else {
-      zip.file(`theme.${ext}`, generateColorSchemeExport(f, currentScheme))
-      zip.file(`settings.${ext}`, generateSettingsExport(f))
-    }
-  })
+document.getElementById('batch-export')!.addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement
+  const originalText = btn.textContent
+  btn.textContent = '📦 Generating ZIP...'
+  btn.disabled = true
 
-  const content = await zip.generateAsync({ type: 'blob' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(content)
-  link.download = 'colorterm-bundle.zip'
-  link.click()
+  try {
+    const zip = new JSZip()
+    const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix']
+    
+    formats.forEach(f => {
+      let ext = 'conf'
+      if (f === 'iterm2') ext = 'itermcolors'
+      else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'
+      else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'
+      else if (f === 'foot') ext = 'ini'
+      else if (['vscode', 'windowsterminal', 'xterm', 'tailwind'].includes(f)) ext = 'json'
+      else if (f === 'css') ext = 'css'
+      else if (f === 'base16') ext = 'yaml'
+      else if (f === 'nix') ext = 'nix'
+
+      zip.file(`${f}/theme.${ext}`, generateColorSchemeExport(f, currentScheme))
+      // Settings only for relevant formats
+      const settings = generateSettingsExport(f)
+      if (settings && !settings.startsWith('# Settings not supported')) {
+        zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : ext}`, settings)
+      }
+    })
+
+    const content = await zip.generateAsync({ type: 'blob' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(content)
+    link.download = 'colorterm-bundle.zip'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } catch (err) {
+    console.error('ZIP generation failed:', err)
+    alert('Failed to generate ZIP file')
+  } finally {
+    btn.textContent = originalText
+    btn.disabled = false
+  }
 })
 
 loadLocalThemes()
