@@ -688,34 +688,48 @@ document.getElementById('fix-contrast')!.addEventListener('click', () => {
   })
 })
 
+async function copyToClipboard(text: string, btn: HTMLButtonElement) {
+  const originalText = btn.textContent
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      // Fallback for non-secure contexts
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.style.position = "fixed"
+      textArea.style.left = "-9999px"
+      textArea.style.top = "0"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      document.execCommand('copy')
+      textArea.remove()
+    }
+    btn.textContent = 'Copied! ✓'
+    console.log('Copied to clipboard successfully')
+  } catch (err) {
+    console.error('Failed to copy:', err)
+    btn.textContent = 'Error! ✕'
+  }
+  setTimeout(() => btn.textContent = originalText, 2000)
+}
+
 document.getElementById('share-link')!.addEventListener('click', (e) => {
   const btn = e.currentTarget as HTMLButtonElement
-  const originalText = btn.textContent
-  navigator.clipboard.writeText(window.location.href)
-  btn.textContent = 'Copied! ✓'
-  btn.style.borderColor = 'var(--accent)'
-  setTimeout(() => {
-    btn.textContent = originalText
-    btn.style.borderColor = ''
-  }, 2000)
+  copyToClipboard(window.location.href, btn)
 })
 
 document.getElementById('copy-export')!.addEventListener('click', (e) => {
   const btn = e.currentTarget as HTMLButtonElement
-  const originalText = btn.textContent
   const text = document.getElementById('export-output')!.textContent || ''
-  navigator.clipboard.writeText(text)
-  btn.textContent = 'Copied! ✓'
-  setTimeout(() => btn.textContent = originalText, 2000)
+  copyToClipboard(text, btn)
 })
 
 document.getElementById('copy-settings')!.addEventListener('click', (e) => {
   const btn = e.currentTarget as HTMLButtonElement
-  const originalText = btn.textContent
   const text = document.getElementById('export-settings')!.textContent || ''
-  navigator.clipboard.writeText(text)
-  btn.textContent = 'Copied! ✓'
-  setTimeout(() => btn.textContent = originalText, 2000)
+  copyToClipboard(text, btn)
 })
 
 document.getElementById('import-btn')!.addEventListener('click', () => {
