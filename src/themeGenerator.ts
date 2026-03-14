@@ -88,11 +88,21 @@ export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: 
     accent: hslToHex((seedHue + 240) % 360, 70, isDark ? 65 : 45),
   }
 
+  // Base16 Mappings
+  theme.base00 = theme.background
+  theme.base01 = theme.mantle
+  theme.base02 = theme.surface0
+  theme.base04 = theme.surface1
+  theme.base05 = theme.foreground
+  theme.base06 = theme.foreground
+  theme.base07 = theme.foreground
+
   const baseAnsiHues = [0, 120, 60, 240, 300, 180, seedHue] 
   const ansiNames = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
   
   theme.black = hslToHex(seedHue, bgS, isDark ? bgL + 10 : bgL - 10)
   theme.brightBlack = hslToHex(seedHue, bgS, isDark ? bgL + 25 : bgL - 25)
+  theme.base03 = theme.brightBlack
 
   ansiNames.forEach((name, i) => {
     let h = baseAnsiHues[i]
@@ -113,8 +123,19 @@ export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: 
     
     if (h < 0) h += 360
     
-    ;(theme as any)[name] = hslToHex(h, ansiS, ansiL)
-    ;(theme as any)[`bright${name.charAt(0).toUpperCase() + name.slice(1)}`] = hslToHex(h, Math.min(100, ansiS + 15), isDark ? Math.min(95, ansiL + 15) : Math.max(5, ansiL - 15))
+    const hex = hslToHex(h, ansiS, ansiL)
+    const brightHex = hslToHex(h, Math.min(100, ansiS + 15), isDark ? Math.min(95, ansiL + 15) : Math.max(5, ansiL - 15))
+    
+    ;(theme as any)[name] = hex
+    ;(theme as any)[`bright${name.charAt(0).toUpperCase() + name.slice(1)}`] = brightHex
+
+    // Map to Base16 slots
+    if (name === 'red') theme.base08 = hex
+    if (name === 'yellow') { theme.base09 = hex; theme.base0A = hex }
+    if (name === 'green') theme.base0B = hex
+    if (name === 'cyan') theme.base0C = hex
+    if (name === 'blue') theme.base0D = hex
+    if (name === 'magenta') { theme.base0E = hex; theme.base0F = brightHex }
   })
 
   return mergeLocked(theme)

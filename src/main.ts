@@ -57,6 +57,7 @@ function redo() {
 }
 
 function applyScheme() {
+  syncBase16Mappings()
   Object.keys(currentScheme).forEach((key) => {
     const input = document.getElementById(key) as HTMLInputElement
     if (input) input.value = (currentScheme as any)[key]
@@ -67,14 +68,23 @@ function applyScheme() {
 const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
 
 function syncSchemeToUrl() {
-  const hexValues = COLOR_KEYS.map(key => (currentScheme as any)[key].replace('#', ''))
+  const hexValues = COLOR_KEYS.map(key => {
+    let hex = (currentScheme as any)[key].replace('#', '')
+    if (hex.length === 3) hex = hex.split('').map((c: string) => c + c).join('')
+    return hex.toLowerCase()
+  })
   const hash = hexValues.join('')
   window.history.replaceState(null, '', '#' + hash)
 }
 
 function loadSchemeFromUrl() {
-  const hash = window.location.hash.slice(1)
-  if (!hash || hash.length < 114) return null // At least basic 19 colors
+  let hash = window.location.hash.slice(1)
+  if (!hash) return null
+  
+  // Handle potentially mangled hashes (e.g. starting with / or containing fragments)
+  hash = hash.split('?')[0].split('/')[0].replace(/^[\/#]+/, '')
+  
+  if (hash.length < 114) return null // At least basic 19 colors
   
   const scheme: any = { ...DEFAULT_SCHEME }
   let hasValidData = false
@@ -83,7 +93,7 @@ function loadSchemeFromUrl() {
     COLOR_KEYS.forEach((key, i) => {
       const hex = hash.slice(i * 6, (i + 1) * 6)
       if (hex && /^[0-9a-fA-F]{6}$/.test(hex)) {
-        scheme[key] = '#' + hex
+        scheme[key] = '#' + hex.toLowerCase()
         hasValidData = true
       }
     })
@@ -91,6 +101,14 @@ function loadSchemeFromUrl() {
   
   return hasValidData ? scheme : null
 }
+
+window.addEventListener('hashchange', () => {
+  const loaded = loadSchemeFromUrl()
+  if (loaded) {
+    currentScheme = loaded
+    applyScheme()
+  }
+})
 
 const savedScheme = loadSchemeFromUrl()
 if (savedScheme) currentScheme = savedScheme
@@ -586,7 +604,7 @@ function writeSampleText() {
 }
 
 // Initial update
-updateTerminalTheme()
+applyScheme()
 writeSampleText()
 
 // Listeners
@@ -598,9 +616,30 @@ document.querySelectorAll('.lock-btn').forEach(btn => {
   })
 })
 
+function syncBase16Mappings() {
+  currentScheme.base00 = currentScheme.background
+  currentScheme.base01 = currentScheme.mantle
+  currentScheme.base02 = currentScheme.surface0
+  currentScheme.base03 = currentScheme.brightBlack
+  currentScheme.base04 = currentScheme.surface1
+  currentScheme.base05 = currentScheme.foreground
+  currentScheme.base06 = currentScheme.foreground
+  currentScheme.base07 = currentScheme.foreground
+  currentScheme.base08 = currentScheme.red
+  currentScheme.base09 = currentScheme.brightRed
+  currentScheme.base0A = currentScheme.yellow
+  currentScheme.base0B = currentScheme.green
+  currentScheme.base0C = currentScheme.cyan
+  currentScheme.base0D = currentScheme.blue
+  currentScheme.base0E = currentScheme.magenta
+  currentScheme.base0F = currentScheme.brightMagenta
+}
+
 document.querySelectorAll('input[type="color"]').forEach((input) => {
   input.addEventListener('input', (e) => {
-    (currentScheme as any)[(e.target as HTMLInputElement).id] = (e.target as HTMLInputElement).value
+    const target = e.target as HTMLInputElement
+    (currentScheme as any)[target.id] = target.value
+    syncBase16Mappings()
     updateTerminalTheme()
   })
   input.addEventListener('change', () => {

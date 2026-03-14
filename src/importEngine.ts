@@ -1,6 +1,24 @@
 import type { ColorScheme } from './types'
 
 export function parseThemeFromString(input: string): Partial<ColorScheme> | null {
+  // Support for share URLs (extract hash if pasted as full link)
+  if (input.includes('#') && input.length > 50) {
+    const hashPart = input.split('#')[1].split('?')[0].split('/')[0]
+    if (hashPart.length >= 114) {
+      const keys = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
+      const urlScheme: any = {}
+      let valid = false
+      for (let i = 0; i < keys.length; i++) {
+        const hex = hashPart.slice(i * 6, (i + 1) * 6)
+        if (hex && /^[0-9a-fA-F]{6}$/.test(hex)) {
+          urlScheme[keys[i]] = '#' + hex
+          valid = true
+        }
+      }
+      if (valid) return urlScheme
+    }
+  }
+
   const scheme: Partial<ColorScheme> = {}
 
   // Try parsing as JSON first
@@ -36,12 +54,13 @@ export function parseThemeFromString(input: string): Partial<ColorScheme> | null
     // Not JSON, continue to other formats
   }
 
-  // Helper to normalize hex
+  // Helper to normalize hex to 6-digits
   const normalizeHex = (hex: string) => {
-    hex = hex.trim()
-    if (hex.startsWith('#')) return hex
-    if (/^[0-9a-fA-F]{3,6}$/.test(hex)) return '#' + hex
-    return hex
+    hex = hex.trim().replace(/^#/, '')
+    if (hex.length === 3) {
+      hex = hex.split('').map(c => c + c).join('')
+    }
+    return /^[0-9a-fA-F]{6}$/.test(hex) ? '#' + hex.toLowerCase() : '#' + hex
   }
 
   // Generic key-value parser (INI, TOML, Xresources, CSS vars)
