@@ -345,7 +345,6 @@ app.innerHTML = `
     <button id="copy-settings" class="randomize-btn" style="background: #141414; border: 1px solid #2a2a2a; color: #ccc;">Copy Settings</button>
 
     <div style="margin-top: auto; padding-top: 24px; display: flex; flex-direction: column; gap: 8px;">
-      <button id="preview-card" class="randomize-btn" style="background: var(--bg-card); border: 1px solid var(--border-input); color: var(--text-main); font-size: 0.7rem;">📸 Generate Preview Card</button>
       <button id="batch-export" class="randomize-btn" style="background: var(--accent); font-size: 0.7rem;">📦 Batch Export (.zip)</button>
     </div>
   </div>
@@ -802,84 +801,6 @@ document.getElementById('batch-export')!.addEventListener('click', async () => {
   const link = document.createElement('a')
   link.href = URL.createObjectURL(content)
   link.download = 'colorterm-bundle.zip'
-  link.click()
-})
-
-document.getElementById('preview-card')!.addEventListener('click', () => {
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')!
-  canvas.width = 1200
-  canvas.height = 630
-  
-  // Background
-  ctx.fillStyle = currentScheme.background
-  ctx.fillRect(0, 0, 1200, 630)
-  
-  // Title
-  ctx.fillStyle = currentScheme.foreground
-  ctx.font = 'bold 48px "JetBrains Mono"'
-  ctx.fillText('ColorTerm Theme', 60, 100)
-  
-  // Palette Grid
-  const colors = [
-    currentScheme.black, currentScheme.red, currentScheme.green, currentScheme.yellow,
-    currentScheme.blue, currentScheme.magenta, currentScheme.cyan, currentScheme.white,
-    currentScheme.brightBlack, currentScheme.brightRed, currentScheme.brightGreen, currentScheme.brightYellow,
-    currentScheme.brightBlue, currentScheme.brightMagenta, currentScheme.brightCyan, currentScheme.brightWhite
-  ]
-  
-  colors.forEach((c, i) => {
-    ctx.fillStyle = c
-    const x = 60 + (i % 8) * 135
-    const y = 160 + Math.floor(i / 8) * 80
-    ctx.beginPath()
-    ctx.roundRect(x, y, 120, 60, 8)
-    ctx.fill()
-  })
-  
-  // Logo / URL Area
-  ctx.fillStyle = currentScheme.surface1
-  ctx.fillRect(0, 550, 1200, 80)
-  ctx.fillStyle = currentScheme.primary
-  ctx.font = '24px "JetBrains Mono"'
-  ctx.fillText('colorterm.fly.dev', 60, 595)
-
-  // Mock Terminal Window in the middle
-  const winX = 60, winY = 320, winW = 1080, winH = 200
-  ctx.fillStyle = currentScheme.mantle
-  ctx.beginPath()
-  ctx.roundRect(winX, winY, winW, winH, 12)
-  ctx.fill()
-  ctx.strokeStyle = currentScheme.surface2
-  ctx.lineWidth = 2
-  ctx.stroke()
-
-  // Window Dots
-  const dots = ['#ff5f56', '#ffbd2e', '#27c93f']
-  dots.forEach((dot, i) => {
-    ctx.fillStyle = dot
-    ctx.beginPath()
-    ctx.arc(winX + 25 + (i * 20), winY + 20, 6, 0, Math.PI * 2)
-    ctx.fill()
-  })
-
-  // Mock Code Lines
-  const codeColors = [currentScheme.magenta, currentScheme.blue, currentScheme.green, currentScheme.yellow, currentScheme.cyan]
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = codeColors[i % codeColors.length]
-    ctx.beginPath()
-    ctx.roundRect(winX + 25, winY + 50 + (i * 25), 100 + Math.random() * 400, 12, 4)
-    ctx.fill()
-    // Second part of line
-    ctx.fillStyle = currentScheme.surface2
-    ctx.beginPath()
-    ctx.roundRect(winX + 150 + Math.random() * 400, winY + 50 + (i * 25), 50 + Math.random() * 200, 12, 4)
-    ctx.fill()
-  }
-  
-  const link = document.createElement('a')
-  link.download = 'colorterm-preview.png'
-  link.href = canvas.toDataURL('image/png')
   link.click()
 })
 
