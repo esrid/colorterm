@@ -700,6 +700,24 @@ document.getElementById('share-link')!.addEventListener('click', (e) => {
   }, 2000)
 })
 
+document.getElementById('copy-export')!.addEventListener('click', (e) => {
+  const btn = e.currentTarget as HTMLButtonElement
+  const originalText = btn.textContent
+  const text = document.getElementById('export-output')!.textContent || ''
+  navigator.clipboard.writeText(text)
+  btn.textContent = 'Copied! ✓'
+  setTimeout(() => btn.textContent = originalText, 2000)
+})
+
+document.getElementById('copy-settings')!.addEventListener('click', (e) => {
+  const btn = e.currentTarget as HTMLButtonElement
+  const originalText = btn.textContent
+  const text = document.getElementById('export-settings')!.textContent || ''
+  navigator.clipboard.writeText(text)
+  btn.textContent = 'Copied! ✓'
+  setTimeout(() => btn.textContent = originalText, 2000)
+})
+
 document.getElementById('import-btn')!.addEventListener('click', () => {
   const area = document.getElementById('import-area')!
   area.style.display = area.style.display === 'none' ? 'block' : 'none'
