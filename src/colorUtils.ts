@@ -195,6 +195,134 @@ export async function extractPaletteFromImage(file: File): Promise<Partial<Color
 /**
  * Intelligently inverts a theme from dark to light or vice versa.
  */
+/**
+ * OKLCH Color Space Utilities
+ * Based on https://bottosson.github.io/posts/oklab/
+ */
+
+export function hexToOklch(hex: string) {
+  let r = parseInt(hex.slice(1, 3), 16) / 255
+  let g = parseInt(hex.slice(3, 5), 16) / 255
+  let b = parseInt(hex.slice(5, 7), 16) / 255
+
+  // Linearize sRGB
+  r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92
+  g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92
+  b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92
+
+  // sRGB to LMS
+  const l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+  const m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+  const s = 0.0883024619 * r + 0.2817188976 * g + 0.6299786405 * b
+
+  // LMS to OKLab
+  const l_ = Math.cbrt(l)
+  const m_ = Math.cbrt(m)
+  const s_ = Math.cbrt(s)
+
+  const L = 0.2104542553 * l_ + 0.793617785 * m_ - 0.0040720468 * s_
+  const a = 1.9779984951 * l_ - 2.428592205 * m_ + 0.4505937099 * s_
+  const b_ = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.808675766 * s_
+
+  // OKLab to OKLCH
+  const C = Math.sqrt(a * a + b_ * b_)
+  const h = Math.atan2(b_, a) * (180 / Math.PI)
+
+  return { l: L, c: C, h: h < 0 ? h + 360 : h }
+}
+
+export function oklchToHex(L: number, C: number, h: number) {
+  const hRad = h * (Math.PI / 180)
+  const a = C * Math.cos(hRad)
+  const b = C * Math.sin(hRad)
+
+  // OKLab to LMS
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b
+
+  const l = l_ * l_ * l_
+  const m = m_ * m_ * m_
+  const s = s_ * s_ * s_
+
+  // LMS to sRGB
+  let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+  let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+  let b_ = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+
+  // Gamma correction
+  const f = (n: number) => {
+    n = Math.max(0, Math.min(1, n))
+    return n > 0.0031308 ? 1.055 * Math.pow(n, 1 / 2.4) - 0.055 : 12.92 * n
+  }
+
+  const toHex = (n: number) => Math.round(f(n) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b_)}`
+}
+
+/**
+ * Perceptually inverts a theme using OKLCH
+ */
+export function generatePerceptualPair(scheme: ColorScheme): ColorScheme {
+  const isDark = getLuminance(scheme.background) < 0.5
+  const newScheme = { ...scheme }
+
+  const mapLightness = (hex: string, targetL: number | ((l: number) => number)) => {
+    const { l, c, h } = hexToOklch(hex)
+    const nextL = typeof targetL === 'function' ? targetL(l) : targetL
+    return oklchToHex(Math.max(0, Math.min(1, nextL)), c, h)
+  }
+
+  if (isDark) {
+    // Dark -> Light
+    newScheme.background = mapLightness(scheme.background, 0.98)
+    newScheme.mantle = mapLightness(scheme.mantle, 0.95)
+    newScheme.crust = mapLightness(scheme.crust, 0.92)
+    newScheme.surface0 = mapLightness(scheme.surface0, 0.88)
+    newScheme.surface1 = mapLightness(scheme.surface1, 0.82)
+    newScheme.surface2 = mapLightness(scheme.surface2, 0.75)
+    newScheme.foreground = mapLightness(scheme.foreground, 0.15)
+  } else {
+    // Light -> Dark
+    newScheme.background = mapLightness(scheme.background, 0.05)
+    newScheme.mantle = mapLightness(scheme.mantle, 0.03)
+    newScheme.crust = mapLightness(scheme.crust, 0.01)
+    newScheme.surface0 = mapLightness(scheme.surface0, 0.12)
+    newScheme.surface1 = mapLightness(scheme.surface1, 0.18)
+    newScheme.surface2 = mapLightness(scheme.surface2, 0.25)
+    newScheme.foreground = mapLightness(scheme.foreground, 0.90)
+  }
+
+  const ansiKeys = [
+    'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'black',
+    'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'brightBlack',
+    'primary', 'secondary', 'accent'
+  ]
+
+  ansiKeys.forEach(key => {
+    const hex = (scheme as any)[key]
+    const { c, h } = hexToOklch(hex)
+    
+    // For ANSI colors, we want to maintain chroma but adjust lightness for readability
+    // In light mode, we want L ~ 0.45-0.55
+    // In dark mode, we want L ~ 0.65-0.75
+    let targetL = isDark ? 0.50 : 0.70
+    
+    // Special handling for blacks/whites to keep them as shades
+    if (key === 'black' || key === 'brightBlack' || key === 'white' || key === 'brightWhite') {
+      if (isDark) {
+         targetL = key.includes('white') ? 0.2 : 0.8 // Invert shades
+      } else {
+         targetL = key.includes('white') ? 0.9 : 0.1
+      }
+    }
+
+    ;(newScheme as any)[key] = oklchToHex(targetL, c, h)
+  })
+
+  return newScheme
+}
+
 export function generateInvertedTheme(scheme: ColorScheme): ColorScheme {
   const isDark = getLuminance(scheme.background) < 0.5
   const newScheme = { ...scheme }

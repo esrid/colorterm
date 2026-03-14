@@ -1,7 +1,7 @@
 import type { ColorScheme } from './types'
 import { DEFAULT_SCHEME } from './constants'
 import { generateCoherentTheme } from './themeGenerator'
-import { generateInvertedTheme } from './colorUtils'
+import { generatePerceptualPair } from './colorUtils'
 
 export class ThemeState {
   private currentScheme: ColorScheme
@@ -62,7 +62,7 @@ export class ThemeState {
 
   invert() {
     this.pushToHistory()
-    this.currentScheme = generateInvertedTheme(this.currentScheme)
+    this.currentScheme = generatePerceptualPair(this.currentScheme)
     this.baseScheme = { ...this.currentScheme }
   }
 

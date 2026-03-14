@@ -14,6 +14,7 @@ import { parseThemeFromString } from './importEngine'
 import { generateCoherentTheme } from './themeGenerator'
 import { ThemeState } from './themeState'
 import { TerminalApp } from './terminalApp'
+import { EditorPreview } from './editorPreview'
 import JSZip from 'jszip'
 
 // Register HLJS languages
@@ -30,6 +31,8 @@ import "@fontsource/jetbrains-mono/700.css"
 
 const themeState = new ThemeState()
 let terminalApp: TerminalApp
+let editorPreview: EditorPreview
+let isProEditor = false
 
 const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
 
@@ -286,24 +289,28 @@ app.innerHTML = `
 
 <main>
   <div style="display: flex; justify-content: flex-end; margin-bottom: 12px; gap: 8px;">
+    <button id="toggle-pro-editor" class="randomize-btn" style="width: auto; padding: 4px 12px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main); font-size: 0.7rem;">✨ Pro Editor: Off</button>
     <select id="preview-mode" style="width: auto; padding: 4px 12px;">
-      <option value="react">Preview: React Code</option>
-      <option value="rust">Preview: Rust</option>
-      <option value="go">Preview: Go</option>
-      <option value="cpp">Preview: C++</option>
-      <option value="html">Preview: HTML</option>
-      <option value="css">Preview: CSS</option>
-      <option value="sql">Preview: SQL</option>
-      <option value="markdown">Preview: Markdown</option>
-      <option value="json">Preview: JSON</option>
-      <option value="vim">Preview: Vim (Python)</option>
-      <option value="htop">Preview: htop</option>
-      <option value="ls">Preview: ls -la</option>
-      <option value="git">Preview: git log</option>
-      <option value="neofetch">Preview: neofetch</option>
+      <option value="react">Preview: React (Code)</option>
+      <option value="rust">Preview: Rust (Code)</option>
+      <option value="go">Preview: Go (Code)</option>
+      <option value="cpp">Preview: C++ (Code)</option>
+      <option value="python">Preview: Python (Code)</option>
+      <option value="html">Preview: HTML (Code)</option>
+      <option value="css">Preview: CSS (Code)</option>
+      <option value="sql">Preview: SQL (Code)</option>
+      <option value="markdown">Preview: Markdown (Code)</option>
+      <option value="json">Preview: JSON (Code)</option>
+      <option value="htop">Preview: htop (Terminal)</option>
+      <option value="ls">Preview: ls -la (Terminal)</option>
+      <option value="git">Preview: git log (Terminal)</option>
+      <option value="neofetch">Preview: neofetch (Terminal)</option>
     </select>
   </div>
-  <div class="terminal-container" id="terminal"></div>
+  <div class="terminal-container">
+    <div id="terminal" style="height: 100%;"></div>
+    <div id="editor-preview" style="height: 100%; display: none; overflow: hidden; border-radius: 8px;"></div>
+  </div>
   
   <div style="margin-top: 24px;">
     <h3>Instant Variants</h3>
@@ -457,6 +464,7 @@ function updateTerminalTheme() {
   })
   const opacity = parseFloat((document.getElementById('term-opacity') as HTMLInputElement).value)
   if (terminalApp) terminalApp.updateTheme(currentScheme, opacity)
+  if (editorPreview) editorPreview.updateTheme(currentScheme)
   const ratio = getContrast(currentScheme.background, currentScheme.foreground)
   const badge = document.getElementById('contrast-badge')!
   let status = 'Fail', color = '#ff4c4c'
@@ -489,8 +497,50 @@ function updateTerminalTheme() {
 }
 
 terminalApp = new TerminalApp('terminal')
+editorPreview = new EditorPreview(document.getElementById('editor-preview')!)
 applyScheme()
-terminalApp.writeSample((document.getElementById('preview-mode') as HTMLSelectElement).value)
+
+function refreshPreview() {
+  const mode = (document.getElementById('preview-mode') as HTMLSelectElement).value
+  const isCode = mode.includes('(Code)')
+  const termEl = document.getElementById('terminal')!
+  const editorEl = document.getElementById('editor-preview')!
+  const toggleBtn = document.getElementById('toggle-pro-editor') as HTMLButtonElement
+
+  if (isProEditor && isCode) {
+    termEl.style.display = 'none'
+    editorEl.style.display = 'block'
+    editorPreview.show()
+    editorPreview.setLanguage(mode.split(' ')[0].toLowerCase())
+    
+    // Get sample code based on language
+    let code = ""
+    switch(mode.split(' ')[0].toLowerCase()) {
+      case 'react':
+        code = `import React, { useState } from 'react';\n\nexport const Counter = ({ initial = 0 }) => {\n  const [count, setCount] = useState(initial);\n\n  return (\n    <div className="p-4 border rounded">\n      <h1 className="text-2xl font-bold">Count: {count}</h1>\n      <button \n        onClick={() => setCount(c => c + 1)}\n        className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"\n      >\n        Increment\n      </button>\n    </div>\n  );\n};`; break;
+      case 'rust':
+        code = `#[derive(Debug)]\npub struct User {\n    id: u64,\n    username: String,\n    active: bool,\n}\n\nimpl User {\n    pub fn new(id: u64, username: &str) -> Self {\n        User {\n            id,\n            username: username.to_string(),\n            active: true,\n        }\n    }\n\n    pub fn deactivate(&mut self) {\n        self.active = false;\n    }\n}\n\nfn main() {\n    let mut user = User::new(1, "ferris");\n    user.deactivate();\n    println!("User: {:?}", user);\n}`; break;
+      default:
+        code = `// Preview for ${mode}\nfunction example() {\n  const greeting = "Hello, World!";\n  console.log(greeting);\n  return true;\n}`; break;
+    }
+    editorPreview.setContent(code)
+    toggleBtn.textContent = '✨ Pro Editor: On'
+  } else {
+    termEl.style.display = 'block'
+    editorEl.style.display = 'none'
+    editorPreview.hide()
+    terminalApp.writeSample(mode.replace(' (Code)', '').replace(' (Terminal)', '').toLowerCase())
+    toggleBtn.textContent = '✨ Pro Editor: Off'
+  }
+}
+
+document.getElementById('toggle-pro-editor')!.addEventListener('click', () => {
+  isProEditor = !isProEditor
+  refreshPreview()
+})
+
+document.getElementById('preview-mode')!.addEventListener('change', refreshPreview)
+refreshPreview()
 
 document.querySelectorAll('.lock-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
@@ -608,7 +658,6 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
 })
 loadLocalThemes()
 document.getElementById('export-format')!.addEventListener('change', () => updateTerminalTheme())
-document.getElementById('preview-mode')!.addEventListener('change', () => terminalApp?.writeSample((document.getElementById('preview-mode') as HTMLSelectElement).value))
 document.getElementById('term-font')!.addEventListener('change', (e) => { const select = e.target as HTMLSelectElement; terminalApp?.setFont(select.value, select.selectedOptions[0].text) })
 document.getElementById('term-opacity')!.addEventListener('input', () => updateTerminalTheme())
 document.getElementById('term-size')!.addEventListener('input', (e) => { if (terminalApp) terminalApp.term.options.fontSize = parseInt((e.target as HTMLInputElement).value) })
