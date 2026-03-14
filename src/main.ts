@@ -139,10 +139,14 @@ app.innerHTML = `
         <input type="number" id="term-line-height" value="1.2" step="0.1" min="1" max="2" title="Line Height">
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <label style="font-size: 0.65rem; color: var(--text-muted); min-width: 45px;">Opacity</label>
+        <label style="font-size: 0.65rem; color: var(--text-muted); min-width: 80px;">Terminal Opacity</label>
         <input type="range" id="term-opacity" value="1" min="0.1" max="1" step="0.01" style="flex: 1;">
+        <span style="font-size: 0.6rem; color: var(--text-muted); opacity: 0.6;">0-1</span>
       </div>
-      <input type="number" id="term-letter-spacing" value="0" step="0.5" min="-2" max="5" title="Letter Spacing">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <label style="font-size: 0.65rem; color: var(--text-muted); min-width: 80px;">Letter Spacing</label>
+        <input type="number" id="term-letter-spacing" value="0" step="0.5" min="-2" max="5">
+      </div>
       
       <div style="margin-top: 8px; border-top: 1px solid var(--border-card); padding-top: 8px;">
         <input type="file" id="wallpaper-upload" accept="image/*" style="display: none;">
@@ -505,8 +509,16 @@ MONO_FONTS.forEach(f => {
 function updateTerminalContainerBackground() {
   const container = document.getElementById('terminal')!
   const opacity = (document.getElementById('term-opacity') as HTMLInputElement).value
-  const bg = currentScheme.background
-  const r = parseInt(bg.slice(1, 3), 16), g = parseInt(bg.slice(3, 5), 16), b = parseInt(bg.slice(5, 7), 16)
+  let bg = currentScheme.background
+  
+  // Robust hex to RGB
+  if (bg.length === 4) {
+    bg = '#' + bg[1] + bg[1] + bg[2] + bg[2] + bg[3] + bg[3]
+  }
+  const r = parseInt(bg.slice(1, 3), 16)
+  const g = parseInt(bg.slice(3, 5), 16)
+  const b = parseInt(bg.slice(5, 7), 16)
+  
   container.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`
 }
 
@@ -552,8 +564,16 @@ function updateTerminalTheme() {
     document.documentElement.style.setProperty(`--term-${key}`, value)
   })
 
+  const opacity = parseFloat((document.getElementById('term-opacity') as HTMLInputElement).value)
   updateTerminalContainerBackground()
-  term.options.theme = { ...currentScheme }
+  
+  const theme = { ...currentScheme }
+  // If opacity is less than 1, we set xterm background to transparent
+  // and let the .terminal-container handle the semi-transparent background
+  if (opacity < 1) {
+    theme.background = 'rgba(0,0,0,0)'
+  }
+  term.options.theme = theme
   
   const ratio = getContrast(currentScheme.background, currentScheme.foreground)
   const badge = document.getElementById('contrast-badge')!
@@ -918,6 +938,11 @@ document.getElementById('term-opacity')!.addEventListener('input', () => {
 
 document.getElementById('term-size')!.addEventListener('input', (e) => {
   term.options.fontSize = parseInt((e.target as HTMLInputElement).value)
+  updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
+})
+
+document.getElementById('term-letter-spacing')!.addEventListener('input', (e) => {
+  term.options.letterSpacing = parseFloat((e.target as HTMLInputElement).value)
   updateTerminalTheme(); requestAnimationFrame(() => fitAddon.fit())
 })
 
