@@ -799,6 +799,45 @@ terminal_colors:
   </array>
 </dict>
 </plist>`
+    case 'st': {
+      return `/* Terminal colors (16 first used in escape sequence) */
+static const char *colorname[] = {
+\t/* 8 normal colors */
+\t"${scheme.black}",    /* 0: black   */
+\t"${scheme.red}",      /* 1: red     */
+\t"${scheme.green}",    /* 2: green   */
+\t"${scheme.yellow}",   /* 3: yellow  */
+\t"${scheme.blue}",     /* 4: blue    */
+\t"${scheme.magenta}",  /* 5: magenta */
+\t"${scheme.cyan}",     /* 6: cyan    */
+\t"${scheme.white}",    /* 7: white   */
+
+\t/* 8 bright colors */
+\t"${scheme.brightBlack}",    /* 8:  bright black   */
+\t"${scheme.brightRed}",      /* 9:  bright red     */
+\t"${scheme.brightGreen}",    /* 10: bright green   */
+\t"${scheme.brightYellow}",   /* 11: bright yellow  */
+\t"${scheme.brightBlue}",     /* 12: bright blue    */
+\t"${scheme.brightMagenta}",  /* 13: bright magenta */
+\t"${scheme.brightCyan}",     /* 14: bright cyan    */
+\t"${scheme.brightWhite}",    /* 15: bright white   */
+
+\t[255] = 0,
+
+\t/* more colors can be added after 255 to use with DefaultXX */
+\t"${scheme.background}", /* 256: default background */
+\t"${scheme.foreground}", /* 257: default foreground */
+\t"${scheme.cursor}",     /* 258: default cursor     */
+};
+
+/*
+ * Default colors (colorname index)
+ * foreground, background, cursor
+ */
+unsigned int defaultfg = 257;
+unsigned int defaultbg = 256;
+static unsigned int defaultcs = 258;`
+    }
     default:
       return ''
   }
