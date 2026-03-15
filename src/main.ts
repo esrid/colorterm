@@ -5,10 +5,12 @@ import json from 'highlight.js/lib/languages/json'
 import lua from 'highlight.js/lib/languages/lua'
 import ini from 'highlight.js/lib/languages/ini'
 import yaml from 'highlight.js/lib/languages/yaml'
+import xml from 'highlight.js/lib/languages/xml'
+import lisp from 'highlight.js/lib/languages/lisp'
 
 import type { ColorScheme } from './types'
 import { DEFAULT_SCHEME, MONO_FONTS, PRESETS } from './constants'
-import { getLuminance, getContrast, fixContrast, extractPaletteFromImage, adjustTheme } from './colorUtils'
+import { getLuminance, getContrast, fixContrast, extractPaletteFromImage, adjustTheme, interpolateSchemes } from './colorUtils'
 import { generateColorSchemeExport, generateSettingsExport } from './exportEngine'
 import { parseThemeFromString } from './importEngine'
 import { generateCoherentTheme } from './themeGenerator'
@@ -24,6 +26,8 @@ hljs.registerLanguage('json', json)
 hljs.registerLanguage('lua', lua)
 hljs.registerLanguage('ini', ini)
 hljs.registerLanguage('yaml', yaml)
+hljs.registerLanguage('xml', xml)
+hljs.registerLanguage('lisp', lisp)
 
 // Import Fonts Locally
 import "@fontsource/inter/400.css"
@@ -175,6 +179,10 @@ app.innerHTML = `
         <button id="import-btn" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);">Import JSON</button>
       </div>
       <div id="import-area" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-card); padding-top: 12px;">
+        <div class="url-fetch-row">
+          <input id="import-url" type="text" placeholder="Paste GitHub/raw dotfile URL...">
+          <button id="import-url-btn" class="btn-ghost">Fetch</button>
+        </div>
         <textarea id="import-json" placeholder="Paste terminal config here (JSON, Kitty, Ghostty, Alacritty...)" style="width: 100%; height: 100px; font-family: monospace; font-size: 0.6rem; padding: 8px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-input); border-radius: 4px; resize: vertical;"></textarea>
         <button id="import-apply" class="randomize-btn" style="margin-top: 8px; font-size: 0.7rem;">Apply Theme</button>
       </div>
@@ -186,7 +194,35 @@ app.innerHTML = `
     <div id="local-themes" style="display: flex; flex-direction: column; gap: 8px;">
       <!-- Populated by JS -->
     </div>
-    <button id="save-local" class="randomize-btn" style="margin-top: 12px; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);">Save Current Theme</button>
+    <div style="display: flex; gap: 8px; margin-top: 12px;">
+      <button id="save-local" class="randomize-btn" style="flex: 1; font-size: 0.7rem; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);">Save Current Theme</button>
+      <button id="diff-btn" class="btn-outline">Diff</button>
+    </div>
+    <div id="diff-area" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-card); padding-top: 12px;">
+      <select id="diff-select" style="margin-bottom: 8px;">
+        <option value="">— pick a saved theme —</option>
+      </select>
+      <div id="diff-output" style="display: flex; flex-direction: column;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Theme Morph</h3>
+    <p style="font-size: 0.6rem; color: var(--text-muted); margin: 0 0 12px;">Blend between two saved themes</p>
+    <div class="morph-selects">
+      <select id="morph-a">
+        <option value="">— Theme A (current) —</option>
+      </select>
+      <select id="morph-b">
+        <option value="">— Theme B —</option>
+      </select>
+      <div class="morph-labels">
+        <span>A</span>
+        <input type="range" id="morph-slider" value="0" min="0" max="100" step="1" style="flex: 1;">
+        <span>B</span>
+      </div>
+      <button id="morph-apply" class="btn-outline" style="width: 100%;">Apply Morphed Theme</button>
+    </div>
   </div>
 
   <div class="card">
@@ -362,6 +398,9 @@ app.innerHTML = `
       <option value="alacritty">Alacritty (TOML)</option>
       <option value="windowsterminal">Windows Terminal (JSON)</option>
       <option value="foot">Foot (INI)</option>
+      <option value="zed">Zed (JSON)</option>
+      <option value="emacs">Emacs (deftheme)</option>
+      <option value="sublime">Sublime Text (.tmTheme)</option>
     </select>
     
     <h3 style="margin-top: 24px;">Color Scheme</h3>
@@ -506,7 +545,7 @@ function updateTerminalTheme() {
   })
   const format = (document.getElementById('export-format') as HTMLSelectElement).value
   const outputEl = document.getElementById('export-output')!, settingsEl = document.getElementById('export-settings')!
-  let lang = (format === 'neovim' || format === 'wezterm') ? 'lua' : (['ghostty', 'kitty', 'foot', 'alacritty'].includes(format) ? 'ini' : 'json')
+  let lang = (format === 'neovim' || format === 'wezterm') ? 'lua' : (format === 'emacs') ? 'lisp' : (['iterm2', 'sublime'].includes(format)) ? 'xml' : (['ghostty', 'kitty', 'foot', 'alacritty'].includes(format) ? 'ini' : 'json')
   outputEl.className = `language-${lang}`; settingsEl.className = `language-${lang}`
   outputEl.removeAttribute('data-highlighted'); settingsEl.removeAttribute('data-highlighted')
   outputEl.textContent = generateColorSchemeExport(format, currentScheme)
@@ -648,7 +687,98 @@ document.getElementById('import-apply')!.addEventListener('click', () => {
 })
 document.getElementById('save-local')!.addEventListener('click', () => {
   const name = prompt('Theme name?') || 'My Theme'; const saved = JSON.parse(localStorage.getItem('my-themes') || '[]'); saved.push({ name, scheme: themeState.getCurrentScheme() });
-  localStorage.setItem('my-themes', JSON.stringify(saved)); loadLocalThemes()
+  localStorage.setItem('my-themes', JSON.stringify(saved)); loadLocalThemes(); populateMorphSelects(); populateDiffSelect()
+})
+
+// --- URL Import ---
+document.getElementById('import-url-btn')!.addEventListener('click', async () => {
+  const btn = document.getElementById('import-url-btn') as HTMLButtonElement
+  let url = (document.getElementById('import-url') as HTMLInputElement).value.trim()
+  if (!url) return
+  // Convert github.com URLs to raw.githubusercontent.com
+  url = url.replace('https://github.com/', 'https://raw.githubusercontent.com/').replace('/blob/', '/')
+  btn.textContent = '...'
+  btn.disabled = true
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const text = await res.text()
+    ;(document.getElementById('import-json') as HTMLTextAreaElement).value = text
+    btn.textContent = 'Done ✓'
+  } catch (e: any) {
+    btn.textContent = 'Error ✕'
+    alert(`Fetch failed: ${e.message}`)
+  } finally {
+    setTimeout(() => { btn.textContent = 'Fetch'; btn.disabled = false }, 2000)
+  }
+})
+
+// --- Theme Diff ---
+const SCHEME_KEYS = ['background','foreground','cursor','mantle','crust','surface0','surface1','surface2','primary','secondary','accent','black','red','green','yellow','blue','magenta','cyan','white','brightBlack','brightRed','brightGreen','brightYellow','brightBlue','brightMagenta','brightCyan','brightWhite'] as const
+
+function populateDiffSelect() {
+  const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
+  const sel = document.getElementById('diff-select') as HTMLSelectElement
+  sel.innerHTML = '<option value="">— pick a saved theme —</option>' + saved.map((t: any, i: number) => `<option value="${i}">${t.name}</option>`).join('')
+}
+
+function renderDiff(other: any) {
+  const current = themeState.getCurrentScheme()
+  const out = document.getElementById('diff-output')!
+  let html = ''
+  for (const key of SCHEME_KEYS) {
+    const a = (current as any)[key], b = (other as any)[key]
+    const changed = a?.toLowerCase() !== b?.toLowerCase()
+    html += `<div class="diff-row${changed ? '' : ' unchanged'}">
+      <span class="diff-key">${key}</span>
+      <div class="diff-swatch" style="background:${a}" title="${a}"></div>
+      <span class="diff-arrow">${changed ? '→' : '='}</span>
+      <div class="diff-swatch" style="background:${b}" title="${b}"></div>
+      ${changed ? `<span class="diff-hex">${b}</span>` : ''}
+    </div>`
+  }
+  out.innerHTML = html
+}
+
+document.getElementById('diff-btn')!.addEventListener('click', () => {
+  const area = document.getElementById('diff-area')!
+  const isOpen = area.style.display !== 'none'
+  area.style.display = isOpen ? 'none' : 'block'
+  if (!isOpen) populateDiffSelect()
+})
+document.getElementById('diff-select')!.addEventListener('change', (e) => {
+  const idx = (e.target as HTMLSelectElement).value
+  if (!idx) { document.getElementById('diff-output')!.innerHTML = ''; return }
+  const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
+  renderDiff(saved[parseInt(idx)].scheme)
+})
+
+// --- Theme Morph ---
+function populateMorphSelects() {
+  const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
+  const opts = '<option value="">— current theme —</option>' + saved.map((t: any, i: number) => `<option value="${i}">${t.name}</option>`).join('')
+  ;(document.getElementById('morph-a') as HTMLSelectElement).innerHTML = opts
+  ;(document.getElementById('morph-b') as HTMLSelectElement).innerHTML = opts.replace('— current theme —', '— Theme B —')
+}
+
+function getMorphScheme(selectId: string) {
+  const val = (document.getElementById(selectId) as HTMLSelectElement).value
+  if (val === '') return themeState.getCurrentScheme()
+  const saved = JSON.parse(localStorage.getItem('my-themes') || '[]')
+  return saved[parseInt(val)]?.scheme || themeState.getCurrentScheme()
+}
+
+document.getElementById('morph-slider')!.addEventListener('input', (e) => {
+  const t = parseInt((e.target as HTMLInputElement).value) / 100
+  const a = getMorphScheme('morph-a'), b = getMorphScheme('morph-b')
+  themeState.setScheme(interpolateSchemes(a, b, t), false)
+  applyScheme()
+})
+document.getElementById('morph-apply')!.addEventListener('click', () => {
+  const t = parseInt((document.getElementById('morph-slider') as HTMLInputElement).value) / 100
+  const a = getMorphScheme('morph-a'), b = getMorphScheme('morph-b')
+  themeState.setScheme(interpolateSchemes(a, b, t))
+  applyScheme()
 })
 document.getElementById('vision-mode')!.addEventListener('change', (e) => {
   const mode = (e.target as HTMLSelectElement).value;
@@ -683,9 +813,9 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
   const btn = e.currentTarget as HTMLButtonElement; const originalText = btn.textContent; btn.textContent = '📦 Generating ZIP...'; btn.disabled = true
   const currentScheme = themeState.getCurrentScheme()
   try {
-    const zip = new JSZip(); const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16']
+    const zip = new JSZip(); const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime']
     formats.forEach(f => {
-      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'
+      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'
       zip.file(`${f}/theme.${ext}`, generateColorSchemeExport(f, currentScheme))
       const settings = generateSettingsExport(f); if (settings && !settings.startsWith('# Settings not supported')) zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : ext}`, settings)
     })
@@ -693,6 +823,8 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
   } catch (err) { alert('Failed to generate ZIP file') } finally { btn.textContent = originalText; btn.disabled = false }
 })
 loadLocalThemes()
+populateMorphSelects()
+populateDiffSelect()
 document.getElementById('export-format')!.addEventListener('change', () => updateTerminalTheme())
 document.getElementById('term-font')!.addEventListener('change', (e) => { const select = e.target as HTMLSelectElement; terminalApp?.setFont(select.value, select.selectedOptions[0].text) })
 document.getElementById('term-opacity')!.addEventListener('input', () => updateTerminalTheme())

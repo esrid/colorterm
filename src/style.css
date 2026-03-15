@@ -452,3 +452,142 @@ input[type="color"]::-webkit-color-swatch {
 .gallery-item:hover .gallery-name {
   color: var(--text-main);
 }
+
+/* Secondary / outline button */
+.btn-outline {
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.btn-outline:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 124, 240, 0.06);
+}
+
+.btn-outline:active {
+  transform: translateY(1px);
+}
+
+/* Small ghost button */
+.btn-ghost {
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(124, 124, 240, 0.06);
+}
+
+.btn-ghost:active {
+  transform: translateY(1px);
+}
+
+/* URL fetch row */
+.url-fetch-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.url-fetch-row input {
+  flex: 1;
+  font-size: 0.65rem;
+  padding: 6px 10px;
+}
+
+/* Range slider */
+input[type="range"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Morph label row */
+.morph-labels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.morph-labels span {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 8px;
+}
+
+/* Diff output row */
+.diff-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.diff-row:hover {
+  background: var(--bg-input);
+}
+
+.diff-row.unchanged {
+  opacity: 0.3;
+}
+
+.diff-swatch {
+  width: 18px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border-card);
+  flex-shrink: 0;
+}
+
+.diff-key {
+  min-width: 95px;
+  font-size: 0.58rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.diff-arrow {
+  font-size: 0.58rem;
+  color: var(--text-muted);
+}
+
+.diff-hex {
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Morph select group */
+.morph-selects {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.morph-selects select {
+  font-size: 0.7rem;
+  padding: 7px 10px;
+}

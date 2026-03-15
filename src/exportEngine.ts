@@ -557,6 +557,248 @@ terminal_colors:
     magenta: '${scheme.brightMagenta}'
     cyan: '${scheme.brightCyan}'
     white: '${scheme.brightWhite}'`
+    case 'zed':
+      return JSON.stringify({
+        "$schema": "https://zed.dev/schema/themes/v0.1.0.json",
+        "name": "ColorTerm",
+        "author": "ColorTerm Generator",
+        "themes": [{
+          "name": "ColorTerm",
+          "appearance": "dark",
+          "style": {
+            "background": scheme.background,
+            "foreground": scheme.foreground,
+            "cursor": scheme.cursor,
+            "selection.background": scheme.surface1,
+            "line_number": scheme.surface2,
+            "line_number.active": scheme.foreground,
+            "text": scheme.foreground,
+            "text.muted": scheme.brightBlack,
+            "border": scheme.surface0,
+            "border.focused": scheme.primary,
+            "panel.background": scheme.mantle,
+            "status_bar.background": scheme.crust,
+            "title_bar.background": scheme.crust,
+            "toolbar.background": scheme.mantle,
+            "tab_bar.background": scheme.crust,
+            "tab.active_background": scheme.background,
+            "tab.inactive_background": scheme.mantle,
+            "editor.background": scheme.background,
+            "editor.gutter.background": scheme.background,
+            "editor.line_number": scheme.surface1,
+            "editor.active_line_number": scheme.primary,
+            "editor.selection.background": scheme.surface1,
+            "editor.active_line.background": scheme.surface0,
+            "syntax": {
+              "keyword": { "color": scheme.magenta, "font_style": "bold" },
+              "function": { "color": scheme.blue },
+              "string": { "color": scheme.green },
+              "number": { "color": scheme.red },
+              "type": { "color": scheme.yellow },
+              "variable": { "color": scheme.foreground },
+              "comment": { "color": scheme.brightBlack, "font_style": "italic" },
+              "operator": { "color": scheme.cyan },
+              "punctuation": { "color": scheme.white },
+              "tag": { "color": scheme.blue },
+              "attribute": { "color": scheme.yellow },
+              "constant": { "color": scheme.accent }
+            },
+            "terminal.background": scheme.background,
+            "terminal.foreground": scheme.foreground,
+            "terminal.bright_foreground": scheme.white,
+            "terminal.dim_foreground": scheme.brightBlack,
+            "terminal.ansi.black": scheme.black,
+            "terminal.ansi.red": scheme.red,
+            "terminal.ansi.green": scheme.green,
+            "terminal.ansi.yellow": scheme.yellow,
+            "terminal.ansi.blue": scheme.blue,
+            "terminal.ansi.magenta": scheme.magenta,
+            "terminal.ansi.cyan": scheme.cyan,
+            "terminal.ansi.white": scheme.white,
+            "terminal.ansi.bright_black": scheme.brightBlack,
+            "terminal.ansi.bright_red": scheme.brightRed,
+            "terminal.ansi.bright_green": scheme.brightGreen,
+            "terminal.ansi.bright_yellow": scheme.brightYellow,
+            "terminal.ansi.bright_blue": scheme.brightBlue,
+            "terminal.ansi.bright_magenta": scheme.brightMagenta,
+            "terminal.ansi.bright_cyan": scheme.brightCyan,
+            "terminal.ansi.bright_white": scheme.brightWhite
+          }
+        }]
+      }, null, 2)
+    case 'emacs':
+      return `(deftheme colorterm "ColorTerm - Generated Theme")
+
+(let ((bg "${scheme.background}")
+      (fg "${scheme.foreground}")
+      (cursor "${scheme.cursor}")
+      (mantle "${scheme.mantle}")
+      (surface0 "${scheme.surface0}")
+      (surface1 "${scheme.surface1}")
+      (surface2 "${scheme.surface2}")
+      (primary "${scheme.primary}")
+      (accent "${scheme.accent}")
+      (black "${scheme.black}")
+      (red "${scheme.red}")
+      (green "${scheme.green}")
+      (yellow "${scheme.yellow}")
+      (blue "${scheme.blue}")
+      (magenta "${scheme.magenta}")
+      (cyan "${scheme.cyan}")
+      (white "${scheme.white}")
+      (br-black "${scheme.brightBlack}")
+      (br-red "${scheme.brightRed}")
+      (br-green "${scheme.brightGreen}")
+      (br-yellow "${scheme.brightYellow}")
+      (br-blue "${scheme.brightBlue}")
+      (br-magenta "${scheme.brightMagenta}")
+      (br-cyan "${scheme.brightCyan}")
+      (br-white "${scheme.brightWhite}"))
+
+  (custom-theme-set-faces
+   'colorterm
+   \`(default ((t (:background ,bg :foreground ,fg))))
+   \`(cursor ((t (:background ,cursor))))
+   \`(fringe ((t (:background ,bg :foreground ,surface2))))
+   \`(line-number ((t (:background ,bg :foreground ,surface1))))
+   \`(line-number-current-line ((t (:background ,surface0 :foreground ,white :bold t))))
+   \`(hl-line ((t (:background ,surface0))))
+   \`(region ((t (:background ,surface1))))
+   \`(minibuffer-prompt ((t (:foreground ,primary :bold t))))
+   \`(mode-line ((t (:background ,mantle :foreground ,fg))))
+   \`(mode-line-inactive ((t (:background ,mantle :foreground ,surface2))))
+
+   ;; Syntax
+   \`(font-lock-keyword-face ((t (:foreground ,magenta :bold t))))
+   \`(font-lock-function-name-face ((t (:foreground ,blue))))
+   \`(font-lock-variable-name-face ((t (:foreground ,fg))))
+   \`(font-lock-string-face ((t (:foreground ,green))))
+   \`(font-lock-comment-face ((t (:foreground ,br-black :italic t))))
+   \`(font-lock-type-face ((t (:foreground ,yellow))))
+   \`(font-lock-constant-face ((t (:foreground ,accent))))
+   \`(font-lock-builtin-face ((t (:foreground ,cyan))))
+   \`(font-lock-preprocessor-face ((t (:foreground ,magenta))))
+   \`(font-lock-warning-face ((t (:foreground ,red :bold t))))
+
+   ;; Term colors
+   \`(term-color-black ((t (:foreground ,black :background ,black))))
+   \`(term-color-red ((t (:foreground ,red :background ,br-red))))
+   \`(term-color-green ((t (:foreground ,green :background ,br-green))))
+   \`(term-color-yellow ((t (:foreground ,yellow :background ,br-yellow))))
+   \`(term-color-blue ((t (:foreground ,blue :background ,br-blue))))
+   \`(term-color-magenta ((t (:foreground ,magenta :background ,br-magenta))))
+   \`(term-color-cyan ((t (:foreground ,cyan :background ,br-cyan))))
+   \`(term-color-white ((t (:foreground ,white :background ,br-white))))))
+
+(provide-theme 'colorterm)`
+    case 'sublime':
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>name</key>
+  <string>ColorTerm</string>
+  <key>settings</key>
+  <array>
+    <dict>
+      <key>settings</key>
+      <dict>
+        <key>background</key>
+        <string>${scheme.background}</string>
+        <key>foreground</key>
+        <string>${scheme.foreground}</string>
+        <key>caret</key>
+        <string>${scheme.cursor}</string>
+        <key>selection</key>
+        <string>${scheme.surface1}</string>
+        <key>lineHighlight</key>
+        <string>${scheme.surface0}</string>
+        <key>gutterForeground</key>
+        <string>${scheme.surface2}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Keyword</string>
+      <key>scope</key><string>keyword</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.magenta}</string>
+        <key>fontStyle</key><string>bold</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Function</string>
+      <key>scope</key><string>entity.name.function</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.blue}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>String</string>
+      <key>scope</key><string>string</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.green}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Number</string>
+      <key>scope</key><string>constant.numeric</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.red}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Type</string>
+      <key>scope</key><string>entity.name.type, storage.type</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.yellow}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Comment</string>
+      <key>scope</key><string>comment</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.brightBlack}</string>
+        <key>fontStyle</key><string>italic</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Variable</string>
+      <key>scope</key><string>variable</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.foreground}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Constant</string>
+      <key>scope</key><string>constant</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.accent}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Operator</string>
+      <key>scope</key><string>keyword.operator</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.cyan}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Tag</string>
+      <key>scope</key><string>entity.name.tag</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.blue}</string>
+      </dict>
+    </dict>
+    <dict>
+      <key>name</key><string>Attribute</string>
+      <key>scope</key><string>entity.other.attribute-name</string>
+      <key>settings</key><dict>
+        <key>foreground</key><string>${scheme.yellow}</string>
+      </dict>
+    </dict>
+  </array>
+</dict>
+</plist>`
     default:
       return ''
   }
@@ -662,6 +904,28 @@ font_name: "${font}"`
 
 vim.o.termguicolors = true
 vim.cmd("colorscheme colorterm")`
+    case 'zed':
+      return JSON.stringify({
+        "buffer_font_family": font,
+        "buffer_font_size": parseInt(size),
+        "buffer_line_height": { "custom": parseFloat(line) },
+        "terminal": {
+          "font_family": font,
+          "font_size": parseInt(size),
+          "line_height": { "custom": parseFloat(line) }
+        }
+      }, null, 2) + "\n\n// Merge into ~/.config/zed/settings.json"
+    case 'emacs':
+      return `; Add to your init.el or .emacs:
+; (load-theme 'colorterm t)
+;
+; Font settings:
+(set-face-attribute 'default nil
+  :family "${font}"
+  :height ${Math.round(parseInt(size) * 10)})`
+    case 'sublime':
+      return `<!-- Save as: Packages/User/ColorTerm.tmTheme -->
+<!-- Then set via: Preferences > Color Scheme > User > ColorTerm -->`
     default:
       return '# Settings not supported for this format'
   }

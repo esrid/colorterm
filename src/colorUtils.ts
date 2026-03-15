@@ -323,6 +323,29 @@ export function generatePerceptualPair(scheme: ColorScheme): ColorScheme {
   return newScheme
 }
 
+/**
+ * Interpolates between two ColorSchemes using HSL blending.
+ * t=0 returns schemeA, t=1 returns schemeB.
+ */
+export function interpolateSchemes(a: ColorScheme, b: ColorScheme, t: number): ColorScheme {
+  const lerpHex = (hexA: string, hexB: string) => {
+    const hA = hexToHsl(hexA), hB = hexToHsl(hexB)
+    // Shortest path hue interpolation
+    let dh = hB.h - hA.h
+    if (dh > 180) dh -= 360
+    if (dh < -180) dh += 360
+    const h = (hA.h + dh * t + 360) % 360
+    const s = hA.s + (hB.s - hA.s) * t
+    const l = hA.l + (hB.l - hA.l) * t
+    return hslToHex(h, s, l)
+  }
+  const result = { ...a }
+  for (const key of Object.keys(a) as (keyof ColorScheme)[]) {
+    result[key] = lerpHex(a[key], b[key])
+  }
+  return result
+}
+
 export function generateInvertedTheme(scheme: ColorScheme): ColorScheme {
   const isDark = getLuminance(scheme.background) < 0.5
   const newScheme = { ...scheme }
