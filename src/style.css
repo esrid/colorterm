@@ -122,7 +122,8 @@ main {
   overflow: hidden;
   padding: 16px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-  backdrop-filter: blur(10px);
+  background-color: var(--bg-card); /* Fallback solid color */
+  transition: background-color 0.3s ease;
 }
 
 [data-theme="light"] .terminal-container {

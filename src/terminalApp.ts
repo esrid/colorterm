@@ -75,25 +75,23 @@ export class TerminalApp {
   updateTheme(scheme: ColorScheme, opacity: number) {
     const theme = { ...scheme }
     if (opacity < 1) {
-      theme.background = 'rgba(0,0,0,0)'
+      // For xterm.js transparency, background should be semi-transparent
+      const hex = scheme.background
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      theme.background = `rgba(${r}, ${g}, ${b}, ${opacity})`
     }
     this.term.options.theme = theme
-    this.updateContainerBackground(scheme.background, opacity)
+    this.updateContainerBackground(scheme.background)
   }
 
-  private updateContainerBackground(bg: string, opacity: number) {
-    const container = document.getElementById('terminal')
+  private updateContainerBackground(bg: string) {
+    const container = document.getElementById('terminal')?.parentElement
     if (!container) return
-
-    let hex = bg
-    if (hex.length === 4) {
-      hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3]
-    }
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
     
-    container.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`
+    // Always use a solid background for the container so the border is visible
+    container.style.backgroundColor = bg
   }
 
   setFont(family: string, name: string) {

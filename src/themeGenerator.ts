@@ -1,17 +1,49 @@
 import type { ColorScheme } from './types'
-import { hslToHex } from './colorUtils'
+import { oklchToHex } from './colorUtils'
 
 export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: Set<string>): ColorScheme {
   const seedHue = Math.floor(Math.random() * 360)
   
-  // Default to dark terminal tone now that selector is removed
+  // Default to dark terminal tone
   const isDark = true
   
-  // Randomize the generation mode internally for variety
-  const modes = ['balanced', 'vibrant', 'muted', 'monochrome', 'high-contrast', 'analogous', 'triadic', 'complementary']
+  const modes = [
+    'balanced', 'vibrant', 'soft', 'monochrome', 
+    'high-contrast', 'analogous', 'triadic', 
+    'complementary', 'split-complementary', 'square'
+  ]
   const mode = modes[Math.floor(Math.random() * modes.length)]
   
-  let bgS, bgL, fgS, fgL, ansiS, ansiL
+  // Perceptual OKLCH Targets
+  let bgL = isDark ? 0.08 : 0.98
+  let bgC = 0.02
+  
+  let fgL = isDark ? 0.92 : 0.08
+  let fgC = 0.01
+  
+  let accentC = 0.12
+  let accentL = isDark ? 0.70 : 0.45
+
+  switch (mode) {
+    case 'vibrant':
+      accentC = 0.18
+      bgC = 0.04
+      break
+    case 'soft':
+      accentC = 0.06
+      accentL = isDark ? 0.65 : 0.55
+      bgC = 0.01
+      break
+    case 'monochrome':
+      accentC = 0.03
+      bgC = 0.01
+      break
+    case 'high-contrast':
+      bgL = isDark ? 0.01 : 1.0
+      fgL = isDark ? 1.0 : 0.01
+      accentC = 0.22
+      break
+  }
 
   const mergeLocked = (newScheme: Partial<ColorScheme>) => {
     Object.keys(currentScheme).forEach(key => {
@@ -22,70 +54,18 @@ export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: 
     return newScheme as ColorScheme;
   };
 
-  switch (mode) {
-    case 'vibrant':
-      bgS = Math.floor(Math.random() * 20) + 15
-      bgL = isDark ? 8 : 92
-      fgS = 20
-      fgL = isDark ? 95 : 5
-      ansiS = 85
-      ansiL = isDark ? 70 : 45
-      break
-    case 'muted':
-      bgS = Math.floor(Math.random() * 10) + 5
-      bgL = isDark ? 15 : 85
-      fgS = 5
-      fgL = isDark ? 80 : 20
-      ansiS = 35
-      ansiL = isDark ? 65 : 45
-      break
-    case 'monochrome':
-      bgS = Math.floor(Math.random() * 15) + 5
-      bgL = isDark ? 5 : 95
-      fgS = bgS
-      fgL = isDark ? 90 : 10
-      ansiS = Math.floor(Math.random() * 30) + 10
-      ansiL = isDark ? 70 : 40
-      break
-    case 'high-contrast':
-      bgS = 0
-      bgL = isDark ? 0 : 100
-      fgS = 0
-      fgL = isDark ? 100 : 0
-      ansiS = 95
-      ansiL = isDark ? 60 : 50
-      break
-    case 'analogous':
-    case 'triadic':
-    case 'complementary':
-      bgS = Math.floor(Math.random() * 15) + 10
-      bgL = isDark ? 8 : 92
-      fgS = 15
-      fgL = isDark ? 90 : 10
-      ansiS = 70
-      ansiL = isDark ? 65 : 45
-      break
-    default: 
-      bgS = Math.floor(Math.random() * 15) + 5
-      bgL = isDark ? 10 : 90
-      fgS = 10
-      fgL = isDark ? 85 : 15
-      ansiS = 60
-      ansiL = isDark ? 65 : 40
-  }
-
   const theme: Partial<ColorScheme> = {
-    background: hslToHex(seedHue, bgS, bgL),
-    mantle: hslToHex(seedHue, bgS, isDark ? Math.max(0, bgL - 2) : Math.min(100, bgL + 2)),
-    crust: hslToHex(seedHue, bgS, isDark ? Math.max(0, bgL - 4) : Math.min(100, bgL + 4)),
-    surface0: hslToHex(seedHue, bgS, isDark ? bgL + 10 : bgL - 10),
-    surface1: hslToHex(seedHue, bgS, isDark ? bgL + 15 : bgL - 15),
-    surface2: hslToHex(seedHue, bgS, isDark ? bgL + 20 : bgL - 20),
-    foreground: hslToHex(seedHue, fgS, fgL),
-    cursor: hslToHex(seedHue, 100, 50),
-    primary: hslToHex(seedHue, 70, isDark ? 65 : 45),
-    secondary: hslToHex((seedHue + 120) % 360, 60, isDark ? 65 : 45),
-    accent: hslToHex((seedHue + 240) % 360, 70, isDark ? 65 : 45),
+    background: oklchToHex(bgL, bgC, seedHue),
+    mantle: oklchToHex(isDark ? Math.max(0, bgL - 0.03) : Math.min(1, bgL + 0.03), bgC, seedHue),
+    crust: oklchToHex(isDark ? Math.max(0, bgL - 0.05) : Math.min(1, bgL + 0.05), bgC, seedHue),
+    surface0: oklchToHex(isDark ? bgL + 0.10 : bgL - 0.10, bgC, seedHue),
+    surface1: oklchToHex(isDark ? bgL + 0.15 : bgL - 0.15, bgC, seedHue),
+    surface2: oklchToHex(isDark ? bgL + 0.20 : bgL - 0.20, bgC, seedHue),
+    foreground: oklchToHex(fgL, fgC, seedHue),
+    cursor: oklchToHex(accentL, accentC, seedHue),
+    primary: oklchToHex(accentL, accentC, seedHue),
+    secondary: oklchToHex(accentL, accentC * 0.8, (seedHue + 30) % 360),
+    accent: oklchToHex(accentL, accentC, (seedHue + 180) % 360),
   }
 
   // Base16 Mappings
@@ -97,39 +77,58 @@ export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: 
   theme.base06 = theme.foreground
   theme.base07 = theme.foreground
 
-  const baseAnsiHues = [0, 120, 60, 240, 300, 180, seedHue] 
+  // ANSI Colors (Standard Terminal Palette)
+  // These are standard hue offsets but we'll adapt them to our harmony mode
   const ansiNames = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
-  
-  theme.black = hslToHex(seedHue, bgS, isDark ? bgL + 10 : bgL - 10)
-  theme.brightBlack = hslToHex(seedHue, bgS, isDark ? bgL + 25 : bgL - 25)
+  const baseHues = {
+    red: 25,
+    green: 145,
+    yellow: 85,
+    blue: 260,
+    magenta: 320,
+    cyan: 190,
+    white: seedHue
+  }
+
+  theme.black = oklchToHex(isDark ? bgL + 0.12 : bgL - 0.12, bgC * 0.5, seedHue)
+  theme.brightBlack = oklchToHex(isDark ? bgL + 0.25 : bgL - 0.25, bgC * 0.5, seedHue)
   theme.base03 = theme.brightBlack
 
-  ansiNames.forEach((name, i) => {
-    let h = baseAnsiHues[i]
+  ansiNames.forEach((name) => {
+    let h = baseHues[name as keyof typeof baseHues]
     
-    if (mode === 'monochrome') {
-       h = (seedHue + (Math.random() * 40 - 20)) % 360 
-    } else if (mode === 'analogous') {
-       h = (seedHue + (i * 15) - 45) % 360
+    // Adjust hues based on mode for more "powerful" harmony
+    if (mode === 'analogous') {
+      // Rotate standard hues towards seedHue
+      const diff = h - seedHue
+      h = seedHue + diff * 0.3
+    } else if (mode === 'monochrome') {
+      h = seedHue + (Math.random() * 20 - 10)
     } else if (mode === 'triadic') {
-       // Spread colors across the triad
-       const offsets = [0, 120, 240, 0, 120, 240, 0]
-       h = (seedHue + offsets[i]) % 360
-    } else if (mode === 'complementary') {
-       // Mix base hue and its complement
-       const isComplement = i % 2 === 0
-       h = (seedHue + (isComplement ? 180 : 0)) % 360
+      // Snap to triadic points
+      const triPoints = [seedHue, (seedHue + 120) % 360, (seedHue + 240) % 360]
+      h = triPoints.reduce((prev, curr) => 
+        Math.abs(curr - h) < Math.abs(prev - h) ? curr : prev
+      )
+    } else if (mode === 'split-complementary') {
+      const splitPoints = [seedHue, (seedHue + 150) % 360, (seedHue + 210) % 360]
+      h = splitPoints.reduce((prev, curr) => 
+        Math.abs(curr - h) < Math.abs(prev - h) ? curr : prev
+      )
+    } else if (mode === 'square') {
+      const squarePoints = [seedHue, (seedHue + 90) % 360, (seedHue + 180) % 360, (seedHue + 270) % 360]
+      h = squarePoints.reduce((prev, curr) => 
+        Math.abs(curr - h) < Math.abs(prev - h) ? curr : prev
+      )
     }
-    
-    if (h < 0) h += 360
-    
-    const hex = hslToHex(h, ansiS, ansiL)
-    const brightHex = hslToHex(h, Math.min(100, ansiS + 15), isDark ? Math.min(95, ansiL + 15) : Math.max(5, ansiL - 15))
+
+    const hex = oklchToHex(accentL, accentC, h)
+    const brightHex = oklchToHex(isDark ? Math.min(0.95, accentL + 0.15) : Math.max(0.05, accentL - 0.15), accentC, h)
     
     ;(theme as any)[name] = hex
     ;(theme as any)[`bright${name.charAt(0).toUpperCase() + name.slice(1)}`] = brightHex
 
-    // Map to Base16 slots
+    // Base16 slots
     if (name === 'red') theme.base08 = hex
     if (name === 'yellow') { theme.base09 = hex; theme.base0A = hex }
     if (name === 'green') theme.base0B = hex
@@ -137,6 +136,10 @@ export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: 
     if (name === 'blue') theme.base0D = hex
     if (name === 'magenta') { theme.base0E = hex; theme.base0F = brightHex }
   })
+
+  // Ensure white is actually light
+  theme.white = oklchToHex(isDark ? 0.85 : 0.15, 0.01, seedHue)
+  theme.brightWhite = oklchToHex(isDark ? 0.98 : 0.05, 0.01, seedHue)
 
   return mergeLocked(theme)
 }

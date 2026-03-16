@@ -78,18 +78,18 @@ export function fixContrast(currentScheme: ColorScheme, lockedColors: Set<string
     let ratio = getContrast(bg, color)
     
     if (ratio < targetRatio) {
-      const { h, s, l } = hexToHsl(color)
+      const { l, c, h } = hexToOklch(color)
       let newL = l
       
-      // Nudge lightness in steps
+      // Nudge lightness in steps perceptually
       for (let i = 0; i < 20; i++) {
-        if (isDarkBg) newL += 4 // Lighten if bg is dark
-        else newL -= 4 // Darken if bg is light
+        if (isDarkBg) newL += 0.04 // Lighten if bg is dark
+        else newL -= 0.04 // Darken if bg is light
         
         if (newL < 0) newL = 0
-        if (newL > 100) newL = 100
+        if (newL > 1) newL = 1
         
-        const newHex = hslToHex(h, s, newL)
+        const newHex = oklchToHex(newL, c, h)
         if (getContrast(bg, newHex) >= targetRatio) {
           ;(newScheme as any)[key] = newHex
           changed = true
@@ -132,7 +132,45 @@ export function adjustTheme(scheme: ColorScheme, hueShift: number, satMult: numb
 }
 
 /**
- * Extracts a palette from an image using a canvas
+ * K-Means clustering for color extraction
+ */
+function kMeans(pixels: {r:number, g:number, b:number}[], k: number, iterations: number = 5) {
+  // Initialize centroids randomly
+  let centroids = []
+  for (let i = 0; i < k; i++) {
+    centroids.push(pixels[Math.floor(Math.random() * pixels.length)])
+  }
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const clusters: {r:number, g:number, b:number}[][] = Array.from({ length: k }, () => [])
+    
+    // Assignment
+    for (const p of pixels) {
+      let minDist = Infinity
+      let clusterIdx = 0
+      for (let i = 0; i < k; i++) {
+        const d = Math.sqrt((p.r - centroids[i].r)**2 + (p.g - centroids[i].g)**2 + (p.b - centroids[i].b)**2)
+        if (d < minDist) {
+          minDist = d
+          clusterIdx = i
+        }
+      }
+      clusters[clusterIdx].push(p)
+    }
+    
+    // Update
+    centroids = clusters.map(cluster => {
+      if (cluster.length === 0) return pixels[Math.floor(Math.random() * pixels.length)]
+      const sum = cluster.reduce((acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }), { r: 0, g: 0, b: 0 })
+      return { r: sum.r / cluster.length, g: sum.g / cluster.length, b: sum.b / cluster.length }
+    })
+  }
+  
+  return centroids
+}
+
+/**
+ * Extracts a palette from an image using K-Means clustering
  */
 export async function extractPaletteFromImage(file: File): Promise<Partial<ColorScheme>> {
   return new Promise((resolve) => {
@@ -142,46 +180,57 @@ export async function extractPaletteFromImage(file: File): Promise<Partial<Color
       img.onload = () => {
         const canvas = document.createElement('canvas')
         const ctx = canvas.getContext('2d')!
-        canvas.width = 100
-        canvas.height = 100
-        ctx.drawImage(img, 0, 0, 100, 100)
+        const size = 64 // Smaller size for performance
+        canvas.width = size
+        canvas.height = size
+        ctx.drawImage(img, 0, 0, size, size)
         
-        const data = ctx.getImageData(0, 0, 100, 100).data
-        const colors: {r:number, g:number, b:number}[] = []
-        for (let i = 0; i < data.length; i += 40) { // Sample
-          colors.push({ r: data[i], g: data[i+1], b: data[i+2] })
+        const data = ctx.getImageData(0, 0, size, size).data
+        const pixels: {r:number, g:number, b:number}[] = []
+        for (let i = 0; i < data.length; i += 4) {
+          pixels.push({ r: data[i], g: data[i+1], b: data[i+2] })
         }
         
+        // Extract 8 dominant colors using K-Means
+        const dominantColors = kMeans(pixels, 8)
+        
         const hex = (c: {r:number, g:number, b:number}) => {
-          const r = Math.round(c.r).toString(16).padStart(2,'0')
-          const g = Math.round(c.g).toString(16).padStart(2,'0')
-          const b = Math.round(c.b).toString(16).padStart(2,'0')
+          const r = Math.round(Math.max(0, Math.min(255, c.r))).toString(16).padStart(2,'0')
+          const g = Math.round(Math.max(0, Math.min(255, c.g))).toString(16).padStart(2,'0')
+          const b = Math.round(Math.max(0, Math.min(255, c.b))).toString(16).padStart(2,'0')
           return `#${r}${g}${b}`
         }
         
-        const sorted = colors.sort((a,b) => (a.r+a.g+a.b) - (b.r+b.g+b.b))
-        const L = sorted.length
+        // Sort by luminance
+        const sorted = dominantColors.sort((a,b) => {
+          const lA = (a.r * 0.299 + a.g * 0.587 + a.b * 0.114)
+          const lB = (b.r * 0.299 + b.g * 0.587 + b.b * 0.114)
+          return lA - lB
+        })
+
+        const dark = hex(sorted[0])
+        const light = hex(sorted[sorted.length - 1])
         
         const scheme: Partial<ColorScheme> = {
-          background: hex(sorted[0]),
-          foreground: hex(sorted[L-1]),
-          cursor: hex(sorted[L-1]),
-          black: hex(sorted[Math.floor(L * 0.05)]),
-          red: hex(sorted[Math.floor(L * 0.2)]),
-          green: hex(sorted[Math.floor(L * 0.35)]),
-          yellow: hex(sorted[Math.floor(L * 0.5)]),
-          blue: hex(sorted[Math.floor(L * 0.65)]),
-          magenta: hex(sorted[Math.floor(L * 0.8)]),
-          cyan: hex(sorted[Math.floor(L * 0.9)]),
-          white: hex(sorted[L-2]),
-          brightBlack: hex(sorted[Math.floor(L * 0.1)]),
-          brightRed: hex(sorted[Math.floor(L * 0.25)]),
-          brightGreen: hex(sorted[Math.floor(L * 0.4)]),
-          brightYellow: hex(sorted[Math.floor(L * 0.55)]),
-          brightBlue: hex(sorted[Math.floor(L * 0.7)]),
-          brightMagenta: hex(sorted[Math.floor(L * 0.85)]),
-          brightCyan: hex(sorted[Math.floor(L * 0.95)]),
-          brightWhite: hex(sorted[L-1]),
+          background: dark,
+          foreground: light,
+          cursor: light,
+          black: hex(sorted[0]),
+          red: hex(sorted[1] || sorted[0]),
+          green: hex(sorted[2] || sorted[0]),
+          yellow: hex(sorted[3] || sorted[0]),
+          blue: hex(sorted[4] || sorted[0]),
+          magenta: hex(sorted[5] || sorted[0]),
+          cyan: hex(sorted[6] || sorted[0]),
+          white: hex(sorted[7] || sorted[0]),
+          brightBlack: hex(sorted[0]),
+          brightRed: hex(sorted[1] || sorted[0]),
+          brightGreen: hex(sorted[2] || sorted[0]),
+          brightYellow: hex(sorted[3] || sorted[0]),
+          brightBlue: hex(sorted[4] || sorted[0]),
+          brightMagenta: hex(sorted[5] || sorted[0]),
+          brightCyan: hex(sorted[6] || sorted[0]),
+          brightWhite: hex(sorted[7] || sorted[0]),
         }
         
         resolve(scheme)
@@ -233,22 +282,34 @@ export function hexToOklch(hex: string) {
 
 export function oklchToHex(L: number, C: number, h: number) {
   const hRad = h * (Math.PI / 180)
-  const a = C * Math.cos(hRad)
-  const b = C * Math.sin(hRad)
+  
+  // Gamut mapping: if color is out of gamut, reduce chroma until it fits
+  let currentC = C
+  let r=0, g=0, b_=0
+  
+  for (let i = 0; i < 10; i++) {
+    const a = currentC * Math.cos(hRad)
+    const b = currentC * Math.sin(hRad)
 
-  // OKLab to LMS
-  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
-  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
-  const s_ = L - 0.0894841775 * a - 1.291485548 * b
+    // OKLab to LMS
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+    const s_ = L - 0.0894841775 * a - 1.291485548 * b
 
-  const l = l_ * l_ * l_
-  const m = m_ * m_ * m_
-  const s = s_ * s_ * s_
+    const l = l_ * l_ * l_
+    const m = m_ * m_ * m_
+    const s = s_ * s_ * s_
 
-  // LMS to sRGB
-  let r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-  let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-  let b_ = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    // LMS to sRGB
+    r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+    g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+    b_ = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    
+    if (r >= -0.001 && r <= 1.001 && g >= -0.001 && g <= 1.001 && b_ >= -0.001 && b_ <= 1.001) {
+      break
+    }
+    currentC *= 0.9
+  }
 
   // Gamma correction
   const f = (n: number) => {
