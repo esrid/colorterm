@@ -245,6 +245,33 @@ export async function extractPaletteFromImage(file: File): Promise<Partial<Color
  * Intelligently inverts a theme from dark to light or vice versa.
  */
 /**
+ * Calculates perceptual distance (Delta E) in OKLab space.
+ */
+export function deltaEOKLab(hex1: string, hex2: string): number {
+  const c1 = hexToOklch(hex1)
+  const c2 = hexToOklch(hex2)
+  
+  const a1 = c1.c * Math.cos(c1.h * (Math.PI / 180))
+  const b1 = c1.c * Math.sin(c1.h * (Math.PI / 180))
+  const a2 = c2.c * Math.cos(c2.h * (Math.PI / 180))
+  const b2 = c2.c * Math.sin(c2.h * (Math.PI / 180))
+  
+  return Math.sqrt((c1.l - c2.l) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2)
+}
+
+/**
+ * Simple 1D Cubic Bezier for interpolation
+ */
+export function cubicBezier(t: number, p0: number, p1: number, p2: number, p3: number): number {
+  return (
+    Math.pow(1 - t, 3) * p0 +
+    3 * Math.pow(1 - t, 2) * t * p1 +
+    3 * (1 - t) * Math.pow(t, 2) * p2 +
+    Math.pow(t, 3) * p3
+  )
+}
+
+/**
  * OKLCH Color Space Utilities
  * Based on https://bottosson.github.io/posts/oklab/
  */
