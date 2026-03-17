@@ -244,31 +244,141 @@ export async function extractPaletteFromImage(file: File): Promise<Partial<Color
 /**
  * Intelligently inverts a theme from dark to light or vice versa.
  */
-/**
- * Calculates perceptual distance (Delta E) in OKLab space.
- */
-export function deltaEOKLab(hex1: string, hex2: string): number {
-  const c1 = hexToOklch(hex1)
-  const c2 = hexToOklch(hex2)
+export function generateTonalPalette(baseHex: string): Record<number, string> {
+  const { c: baseC, h: baseH } = hexToOklch(baseHex)
   
-  const a1 = c1.c * Math.cos(c1.h * (Math.PI / 180))
-  const b1 = c1.c * Math.sin(c1.h * (Math.PI / 180))
-  const a2 = c2.c * Math.cos(c2.h * (Math.PI / 180))
-  const b2 = c2.c * Math.sin(c2.h * (Math.PI / 180))
-  
-  return Math.sqrt((c1.l - c2.l) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2)
+  const stops = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]
+  const palette: Record<number, string> = {}
+
+  const getL = (stop: number) => {
+    const t = (stop - 50) / 900
+    const l = 0.98 - (1 / (1 + Math.exp(-6 * (t - 0.5))) * 0.86)
+    return Math.max(0, Math.min(1, l))
+  }
+
+  const getC = (stop: number) => {
+    const t = (stop - 50) / 900
+    const bell = Math.exp(-Math.pow(t - 0.5, 2) / 0.08)
+    return baseC * (0.3 + 0.7 * bell)
+  }
+
+  stops.forEach(stop => {
+    const targetL = getL(stop)
+    const targetC = getC(stop)
+    let targetH = baseH
+    palette[stop] = oklchToHex(targetL, targetC, targetH)
+  })
+
+  return palette
 }
 
 /**
- * Simple 1D Cubic Bezier for interpolation
+ * Converts Kelvin temperature to sRGB.
+ * Range: 1000K to 40000K
  */
-export function cubicBezier(t: number, p0: number, p1: number, p2: number, p3: number): number {
-  return (
-    Math.pow(1 - t, 3) * p0 +
-    3 * Math.pow(1 - t, 2) * t * p1 +
-    3 * (1 - t) * Math.pow(t, 2) * p2 +
-    Math.pow(t, 3) * p3
-  )
+export function kelvinToHex(kelvin: number): string {
+  let temp = kelvin / 100
+  let r, g, b_
+  
+  if (temp <= 66) {
+    r = 255
+    g = 99.4708025861 * Math.log(temp) - 161.1195681661
+    if (temp <= 19) b_ = 0
+    else b_ = 138.5177312231 * Math.log(temp - 10) - 305.0447927307
+  } else {
+    r = 329.698727446 * Math.pow(temp - 60, -0.1332047592)
+    g = 288.1221695283 * Math.pow(temp - 60, -0.0755148492)
+    b_ = 255
+  }
+  
+  const clamp = (x: number) => Math.max(0, Math.min(255, Math.round(x)))
+  const toHex = (n: number) => clamp(n).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b_)}`
+}
+
+/**
+ * Advanced Perceptual Contrast Algorithm (APCA) simplified.
+ * Returns value between -108 and 106.
+ */
+export function getAPCA(textHex: string, bgHex: string): number {
+  const sRGBtoY = (c: number) => Math.pow(c / 255, 2.4)
+  const getY = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return 0.2126729 * sRGBtoY(r) + 0.7151522 * sRGBtoY(g) + 0.0721750 * sRGBtoY(b)
+  }
+
+  let Ytxt = getY(textHex)
+  let Ybg = getY(bgHex)
+
+  let Lc
+  if (Ybg > Ytxt) {
+    Lc = (Math.pow(Ybg, 0.56) - Math.pow(Ytxt, 0.57)) * 1.14
+    Lc = (Lc < 0.1) ? 0 : (Lc * 100) - 2.7
+  } else {
+    Lc = (Math.pow(Ybg, 0.65) - Math.pow(Ytxt, 0.62)) * 1.14
+    Lc = (Lc > -0.1) ? 0 : (Lc * 100) + 2.7
+  }
+  return Lc
+}
+
+/**
+ * Wyman's analytic fit for CIE 1931 Color Matching Functions.
+ * Used for accurate spectral to XYZ conversion.
+ */
+function wymanCMF(lambda: number) {
+  const f = (x: number, alpha: number, mu: number, sigma1: number, sigma2: number) => {
+    const d = x - mu
+    const sigma = d < 0 ? sigma1 : sigma2
+    return alpha * Math.exp(-0.5 * (d / sigma) ** 2)
+  }
+
+  const x = f(lambda, 1.056, 599.8, 37.9, 31.0) + f(lambda, 0.362, 442.0, 16.0, 26.7) + f(lambda, -0.065, 501.1, 20.4, 26.2)
+  const y = f(lambda, 0.821, 568.8, 46.9, 40.5) + f(lambda, 0.286, 530.9, 16.3, 31.1)
+  const z = f(lambda, 1.217, 437.0, 11.8, 36.0) + f(lambda, 0.681, 459.0, 26.0, 13.8)
+  
+  return { x, y, z }
+}
+
+/**
+ * Advanced Thin-Film Interference simulation.
+ * Calculates sRGB from thickness (nm).
+ */
+export function interferenceToHex(thicknessNm: number): string {
+  const nFilm = 1.33 // Water/Soap
+  let X = 0, Y = 0, Z = 0
+  
+  // Sample visible spectrum 380nm - 780nm
+  for (let l = 380; l <= 780; l += 5) {
+    // Path difference for normal incidence
+    const delta = 2 * nFilm * thicknessNm
+    // Phase shift (PI at first surface reflection n_air < n_film)
+    const phi = Math.PI
+    const phase = (2 * Math.PI * delta) / l + phi
+    // Reflectance I = 0.5 * (1 + cos(phase))
+    const R = 0.5 * (1 + Math.cos(phase))
+    
+    const cmf = wymanCMF(l)
+    X += R * cmf.x
+    Y += R * cmf.y
+    Z += R * cmf.z
+  }
+
+  // Normalize XYZ
+  const norm = 80 // Arbitrary normalization for brightness
+  X /= norm; Y /= norm; Z /= norm
+
+  // XYZ to linear sRGB
+  let rL =  3.2406 * X - 1.5372 * Y - 0.4986 * Z
+  let gL = -0.9689 * X + 1.8758 * Y + 0.0415 * Z
+  let bL =  0.0557 * X - 0.2040 * Y + 1.0570 * Z
+
+  const clamp = (v: number) => Math.max(0, Math.min(1, v))
+  const gamma = (v: number) => v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1/2.4) - 0.055
+  
+  const toHex = (v: number) => Math.round(gamma(clamp(v)) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(rL)}${toHex(gL)}${toHex(bL)}`
 }
 
 /**
@@ -346,6 +456,57 @@ export function oklchToHex(L: number, C: number, h: number) {
 
   const toHex = (n: number) => Math.round(f(n) * 255).toString(16).padStart(2, '0')
   return `#${toHex(r)}${toHex(g)}${toHex(b_)}`
+}
+
+/**
+ * Calculates perceptual distance (Delta E) in OKLab space.
+ */
+export function deltaEOKLab(hex1: string, hex2: string): number {
+  const c1 = hexToOklch(hex1)
+  const c2 = hexToOklch(hex2)
+  
+  const a1 = c1.c * Math.cos(c1.h * (Math.PI / 180))
+  const b1 = c1.c * Math.sin(c1.h * (Math.PI / 180))
+  const a2 = c2.c * Math.cos(c2.h * (Math.PI / 180))
+  const b2 = c2.c * Math.sin(c2.h * (Math.PI / 180))
+  
+  return Math.sqrt((c1.l - c2.l) ** 2 + (a1 - a2) ** 2 + (b1 - b2) ** 2)
+}
+
+/**
+ * Simple 1D Cubic Bezier for interpolation
+ */
+export function cubicBezier(t: number, p0: number, p1: number, p2: number, p3: number): number {
+  return (
+    Math.pow(1 - t, 3) * p0 +
+    3 * Math.pow(1 - t, 2) * t * p1 +
+    3 * (1 - t) * Math.pow(t, 2) * p2 +
+    Math.pow(t, 3) * p3
+  )
+}
+
+/**
+ * Bezier interpolation in OKLAB space for smooth gradients.
+ */
+export function bezierInterpolate(hexStart: string, hexEnd: string, t: number): string {
+  const c1 = hexToOklch(hexStart)
+  const c2 = hexToOklch(hexEnd)
+  
+  // Convert to OKLab for linear interpolation
+  const a1 = c1.c * Math.cos(c1.h * (Math.PI / 180))
+  const b1 = c1.c * Math.sin(c1.h * (Math.PI / 180))
+  const a2 = c2.c * Math.cos(c2.h * (Math.PI / 180))
+  const b2 = c2.c * Math.sin(c2.h * (Math.PI / 180))
+
+  // Simple linear for now, but we use OKLab which is already better than RGB/HSL
+  const L = c1.l + (c2.l - c1.l) * t
+  const A = a1 + (a2 - a1) * t
+  const B = b1 + (b2 - b1) * t
+  
+  const C = Math.sqrt(A * A + B * B)
+  const h = Math.atan2(B, A) * (180 / Math.PI)
+  
+  return oklchToHex(L, C, h < 0 ? h + 360 : h)
 }
 
 /**

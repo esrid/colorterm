@@ -410,30 +410,6 @@ set -g message-style "bg=${scheme.surface1},fg=${scheme.foreground}"`
     brightWhite = "${scheme.brightWhite}";
   };
 }`
-    case 'tailwind':
-      return `/** @type {import('tailwindcss').Config} */
-module.exports = {
-  theme: {
-    extend: {
-      colors: {
-        'terminal-bg': '${scheme.background}',
-        'terminal-fg': '${scheme.foreground}',
-        'terminal-primary': '${scheme.primary}',
-        'terminal-accent': '${scheme.accent}',
-        ansi: {
-          black: '${scheme.black}',
-          red: '${scheme.red}',
-          green: '${scheme.green}',
-          yellow: '${scheme.yellow}',
-          blue: '${scheme.blue}',
-          magenta: '${scheme.magenta}',
-          cyan: '${scheme.cyan}',
-          white: '${scheme.white}',
-        }
-      }
-    }
-  }
-}`
     case 'css':
       return `:root {
   --term-bg: ${scheme.background};

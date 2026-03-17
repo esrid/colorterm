@@ -1,12 +1,5 @@
 import './style.css'
 import 'xterm/css/xterm.css'
-import hljs from 'highlight.js/lib/core'
-import json from 'highlight.js/lib/languages/json'
-import lua from 'highlight.js/lib/languages/lua'
-import ini from 'highlight.js/lib/languages/ini'
-import yaml from 'highlight.js/lib/languages/yaml'
-import xml from 'highlight.js/lib/languages/xml'
-import lisp from 'highlight.js/lib/languages/lisp'
 
 import type { ColorScheme } from './types'
 import { DEFAULT_SCHEME, MONO_FONTS, PRESETS } from './constants'
@@ -19,15 +12,6 @@ import { TerminalApp } from './terminalApp'
 import { EditorPreview } from './editorPreview'
 import { ColorWheel } from './colorWheel'
 import type { HarmonyMode } from './colorWheel'
-import JSZip from 'jszip'
-
-// Register HLJS languages
-hljs.registerLanguage('json', json)
-hljs.registerLanguage('lua', lua)
-hljs.registerLanguage('ini', ini)
-hljs.registerLanguage('yaml', yaml)
-hljs.registerLanguage('xml', xml)
-hljs.registerLanguage('lisp', lisp)
 
 // Import Fonts Locally
 import "@fontsource/inter/400.css"
@@ -42,6 +26,28 @@ let colorWheel: ColorWheel
 let isProEditor = false
 
 const COLOR_KEYS = ['background', 'foreground', 'cursor', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite', 'mantle', 'crust', 'surface0', 'surface1', 'surface2', 'primary', 'secondary', 'accent']
+
+/**
+ * Lazy-load Highlight.js for code previews and palette export highlighting.
+ */
+async function getHighlighter() {
+  const hljs = (await import('highlight.js/lib/core')).default
+  const json = (await import('highlight.js/lib/languages/json')).default
+  const lua = (await import('highlight.js/lib/languages/lua')).default
+  const ini = (await import('highlight.js/lib/languages/ini')).default
+  const yaml = (await import('highlight.js/lib/languages/yaml')).default
+  const xml = (await import('highlight.js/lib/languages/xml')).default
+  const lisp = (await import('highlight.js/lib/languages/lisp')).default
+
+  if (!hljs.getLanguage('json')) hljs.registerLanguage('json', json)
+  if (!hljs.getLanguage('lua')) hljs.registerLanguage('lua', lua)
+  if (!hljs.getLanguage('ini')) hljs.registerLanguage('ini', ini)
+  if (!hljs.getLanguage('yaml')) hljs.registerLanguage('yaml', yaml)
+  if (!hljs.getLanguage('xml')) hljs.registerLanguage('xml', xml)
+  if (!hljs.getLanguage('lisp')) hljs.registerLanguage('lisp', lisp)
+
+  return hljs
+}
 
 function applyScheme() {
   const currentScheme = themeState.getCurrentScheme()
@@ -158,37 +164,52 @@ app.innerHTML = `
   <div class="card">
     <h3>Generate & Import</h3>
     <div class="control-group">
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <button id="randomize" class="randomize-btn">Generate Theme</button>
-        <button id="invert-mode" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);" title="Switch between Dark/Light modes">🌗 Invert Mode</button>
-      </div>
-      
-      <div style="margin-top: 12px; border-top: 1px solid var(--border-card); padding-top: 12px;">
-        <div class="control-group">
-          <input type="file" id="image-upload" accept="image/*" style="display: none;">
-          <button id="trigger-image" class="randomize-btn" style="background: var(--bg-sidebar); border: 1px solid var(--border-input); color: var(--text-main); font-size: 0.7rem;">🎨 Image to Theme</button>
+      <!-- Creation Actions -->
+      <div class="action-grid">
+        <div style="display: flex; gap: 4px; grid-column: span 2;">
+          <button id="randomize" class="randomize-btn" style="flex: 1; font-size: 0.75rem;">Generate Theme</button>
+          <select id="gen-strategy" title="Generation Algorithm" style="width: auto; font-size: 0.7rem; padding: 4px 8px; background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main); border-radius: 6px;">
+            <option value="tonal">Tonal (Modern)</option>
+            <option value="vibrant">Vibrant (Pop)</option>
+            <option value="contrast">Contrast-Lock</option>
+            <option value="minimal">Minimalist</option>
+            <option value="thermal">Thermal (Kelvin)</option>
+            <option value="hueshift">Hue Shifting</option>
+            <option value="apca">APCA (Contrast)</option>
+            <option value="interference">Interference</option>
+            <option value="voronoi">Voronoi</option>
+            <option value="bezier">Bezier Ramp</option>
+          </select>
         </div>
+        <button id="invert-mode" class="btn-outline" style="font-size: 0.65rem;">🌗 Invert</button>
+        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+        <button id="trigger-image" class="btn-outline" style="font-size: 0.65rem;">🎨 From Image</button>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-        <button id="undo-btn" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);" title="Undo (Ctrl+Z)">↩ Undo</button>
-        <button id="redo-btn" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);" title="Redo (Ctrl+Y)">↪ Redo</button>
+      <div class="divider"></div>
+
+      <!-- History Actions -->
+      <div class="action-grid">
+        <button id="undo-btn" class="btn-ghost" style="font-size: 0.65rem;" title="Undo (Ctrl+Z)">↩ Undo</button>
+        <button id="redo-btn" class="btn-ghost" style="font-size: 0.65rem;" title="Redo (Ctrl+Y)">↪ Redo</button>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <button id="share-link" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);">Share Theme</button>
-        <button id="import-btn" class="randomize-btn" style="background: var(--bg-input); border: 1px solid var(--border-input); color: var(--text-main);">Import JSON</button>
+
+      <!-- Share & Import -->
+      <div class="action-grid" style="margin-top: 4px;">
+        <button id="share-link" class="btn-ghost" style="font-size: 0.65rem;">🔗 Share</button>
+        <button id="import-btn" class="btn-ghost" style="font-size: 0.65rem;">📥 Import</button>
       </div>
+
       <div id="import-area" style="display: none; margin-top: 12px; border-top: 1px solid var(--border-card); padding-top: 12px;">
         <div class="url-fetch-row">
-          <input id="import-url" type="text" placeholder="Paste GitHub/raw dotfile URL...">
+          <input id="import-url" type="text" placeholder="Paste raw URL...">
           <button id="import-url-btn" class="btn-ghost">Fetch</button>
         </div>
-        <textarea id="import-json" placeholder="Paste terminal config here (JSON, Kitty, Ghostty, Alacritty...)" style="width: 100%; height: 100px; font-family: monospace; font-size: 0.6rem; padding: 8px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-input); border-radius: 4px; resize: vertical;"></textarea>
+        <textarea id="import-json" placeholder="Paste config here..." style="width: 100%; height: 80px; font-family: monospace; font-size: 0.6rem; padding: 8px; background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-input); border-radius: 4px; resize: vertical;"></textarea>
         <button id="import-apply" class="randomize-btn" style="margin-top: 8px; font-size: 0.7rem;">Apply Theme</button>
       </div>
     </div>
-  </div>  
-
+  </div>
     <div class="card">
     <h3>My Saved Themes</h3>
     <div id="local-themes" style="display: flex; flex-direction: column; gap: 8px;">
@@ -391,7 +412,6 @@ app.innerHTML = `
       <option value="zellij">Zellij (KDL)</option>
       <option value="tmux">Tmux (.conf)</option>
       <option value="nix">Nix (Home Manager)</option>
-      <option value="tailwind">Tailwind CSS</option>
       <option value="css">CSS Variables</option>
       <option value="base16">Base16 (YAML)</option>
       <option value="iterm2">iTerm2 (.itermcolors)</option>
@@ -516,7 +536,7 @@ function updateVariants() {
   })
 }
 
-function updateTerminalTheme() {
+async function updateTerminalTheme() {
   const currentScheme = themeState.getCurrentScheme()
   Object.entries(currentScheme).forEach(([key, value]) => {
     document.documentElement.style.setProperty(`--term-${key}`, value)
@@ -553,6 +573,8 @@ function updateTerminalTheme() {
   outputEl.textContent = generateColorSchemeExport(format, currentScheme)
   settingsEl.textContent = generateSettingsExport(format)
   syncSchemeToUrl(); updateVariants()
+  
+  const hljs = await getHighlighter()
   hljs.highlightElement(outputEl); hljs.highlightElement(settingsEl)
 }
 
@@ -567,7 +589,7 @@ document.getElementById('harmony-mode')!.addEventListener('change', (e) => {
 })
 applyScheme()
 
-function refreshPreview() {
+async function refreshPreview() {
   const mode = (document.getElementById('preview-mode') as HTMLSelectElement).value
   const isCode = mode.includes('(Code)')
   const termEl = document.getElementById('terminal')!
@@ -650,7 +672,11 @@ document.querySelectorAll('input[type="color"]').forEach((input) => {
   })
 })
 
-document.getElementById('randomize')!.addEventListener('click', () => { themeState.randomize(); applyScheme() })
+document.getElementById('randomize')!.addEventListener('click', () => { 
+  const strategy = (document.getElementById('gen-strategy') as HTMLSelectElement).value as any
+  themeState.randomize(strategy); 
+  applyScheme() 
+})
 document.getElementById('invert-mode')!.addEventListener('click', () => { themeState.invert(); applyScheme() })
 document.getElementById('trigger-image')!.addEventListener('click', () => { document.getElementById('image-upload')!.click() })
 document.getElementById('trigger-wallpaper')!.addEventListener('click', () => { document.getElementById('wallpaper-upload')!.click() })
@@ -831,6 +857,7 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
   const btn = e.currentTarget as HTMLButtonElement; const originalText = btn.textContent; btn.textContent = '📦 Generating ZIP...'; btn.disabled = true
   const currentScheme = themeState.getCurrentScheme()
   try {
+    const JSZip = (await import('jszip')).default
     const zip = new JSZip(); const formats = ['ghostty', 'konsole', 'kde', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime']
     formats.forEach(f => {
       let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (f === 'konsole') ext = 'colorscheme'; else if (f === 'kde') ext = 'colors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'

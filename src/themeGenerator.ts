@@ -1,5 +1,5 @@
 import type { ColorScheme } from './types'
-import { oklchToHex, deltaEOKLab, cubicBezier, hexToOklch } from './colorUtils'
+import { oklchToHex, hexToOklch, kelvinToHex, getAPCA, interferenceToHex, bezierInterpolate } from './colorUtils'
 
 type AestheticProfile = {
   name: string;
@@ -17,144 +17,174 @@ const PROFILES: AestheticProfile[] = [
   { name: 'Retro', isDark: true, bgL: [0.08, 0.12], bgC: [0.02, 0.04], fgL: [0.80, 0.88], accentC: [0.12, 0.18], hueDrift: 0.6 },
   { name: 'Minimal', isDark: true, bgL: [0.03, 0.06], bgC: [0.00, 0.01], fgL: [0.90, 0.98], accentC: [0.08, 0.15], hueDrift: 0.8 },
   { name: 'Latte', isDark: false, bgL: [0.94, 0.99], bgC: [0.01, 0.04], fgL: [0.05, 0.15], accentC: [0.08, 0.18], hueDrift: 0.3 },
+  { name: 'OLED', isDark: true, bgL: [0, 0.01], bgC: [0, 0], fgL: [0.9, 1.0], accentC: [0.2, 0.3], hueDrift: 0 },
+  { name: 'Matrix', isDark: true, bgL: [0.01, 0.03], bgC: [0.02, 0.05], fgL: [0.8, 0.9], accentC: [0.2, 0.3], hueDrift: 1.0 } // All hues pulled to green
 ]
 
-const HUE_SAFE_ZONES: Record<string, [number, number]> = {
-  red: [20, 50],
-  green: [120, 165],
-  yellow: [70, 100],
-  blue: [235, 285],
-  magenta: [290, 335],
-  cyan: [180, 225],
-}
+export type GenerationStrategy = 'tonal' | 'vibrant' | 'contrast' | 'minimal' | 'thermal' | 'bezier' | 'voronoi' | 'hueshift' | 'apca' | 'interference'
 
-export function generateCoherentTheme(currentScheme: ColorScheme, lockedColors: Set<string>): ColorScheme {
+export function generateCoherentTheme(
+  currentScheme: ColorScheme, 
+  lockedColors: Set<string>,
+  strategy: GenerationStrategy = 'tonal'
+): ColorScheme {
   const seedHue = Math.floor(Math.random() * 360)
   const profile = PROFILES[Math.floor(Math.random() * PROFILES.length)]
   const isDark = profile.isDark
 
   const modes = ['balanced', 'vibrant', 'soft', 'monochrome', 'analogous', 'triadic', 'complementary']
-  const mode = modes[Math.floor(Math.random() * modes.length)]
+  const mode = strategy === 'minimal' ? 'monochrome' : (strategy === 'vibrant' ? 'triadic' : modes[Math.floor(Math.random() * modes.length)])
   
-  // --- Profile-Based Value Selection ---
   const rand = (range: [number, number]) => range[0] + Math.random() * (range[1] - range[0])
   
   let bgL = rand(profile.bgL)
   let bgC = rand(profile.bgC)
-  let fgL = rand(profile.fgL)
   let accentC = rand(profile.accentC)
   let accentL = isDark ? 0.65 + Math.random() * 0.15 : 0.35 + Math.random() * 0.15
 
-  // Contrast Guard: Ensure FG vs BG is at least ~10:1 (perceptual)
-  if (isDark && (fgL - bgL < 0.65)) fgL = Math.min(1, bgL + 0.75)
-  if (!isDark && (bgL - fgL < 0.65)) fgL = Math.max(0, bgL - 0.75)
-
-  // Surface Depth with Bezier Curves
-  // We use a curve that creates more distinction for "higher" surfaces
-  const getSurfaceL = (t: number) => {
-    const maxOffset = 0.30
-    const offset = cubicBezier(t, 0, 0, 0.2, 1) * maxOffset
-    return isDark ? Math.min(0.95, bgL + offset) : Math.max(0.05, bgL - offset)
+  // Strategy Specific Adjustments
+  switch (strategy) {
+    case 'vibrant':
+      accentC = Math.min(0.35, accentC * 1.8)
+      bgC = Math.min(0.1, bgC * 2)
+      break
+    case 'minimal':
+      accentC = accentC * 0.3
+      bgC = bgC * 0.2
+      break
+    case 'contrast':
+      bgL = isDark ? 0.01 : 0.99
+      bgC = 0
+      break
+    case 'thermal':
+      bgL = 0.02
+      bgC = 0.01
+      break
   }
 
   const theme: Partial<ColorScheme> = {
     background: oklchToHex(bgL, bgC, seedHue),
-    mantle: oklchToHex(isDark ? Math.max(0, bgL - 0.03) : Math.min(1, bgL + 0.03), bgC * 1.1, seedHue),
-    crust: oklchToHex(isDark ? Math.max(0, bgL - 0.05) : Math.min(1, bgL + 0.05), bgC * 1.2, seedHue),
-    surface0: oklchToHex(getSurfaceL(0.2), bgC * 0.9, seedHue),
-    surface1: oklchToHex(getSurfaceL(0.5), bgC * 0.8, seedHue),
-    surface2: oklchToHex(getSurfaceL(0.9), bgC * 0.7, seedHue),
-    foreground: oklchToHex(fgL, 0.01, seedHue),
+    mantle: oklchToHex(isDark ? Math.max(0, bgL - 0.03) : Math.min(1, bgL + 0.03), bgC, seedHue),
+    crust: oklchToHex(isDark ? Math.max(0, bgL - 0.06) : Math.min(1, bgL + 0.06), bgC, seedHue),
+    surface0: oklchToHex(isDark ? bgL + 0.1 : bgL - 0.1, bgC * 1.2, seedHue),
+    surface1: oklchToHex(isDark ? bgL + 0.15 : bgL - 0.15, bgC * 1.4, seedHue),
+    surface2: oklchToHex(isDark ? bgL + 0.2 : bgL - 0.2, bgC * 1.6, seedHue),
+    foreground: oklchToHex(isDark ? 0.9 : 0.1, bgC * 0.5, seedHue),
     cursor: oklchToHex(accentL, accentC, seedHue),
     primary: oklchToHex(accentL, accentC, seedHue),
-    secondary: oklchToHex(accentL, accentC * 0.8, (seedHue + 30 + (Math.random() * 20)) % 360),
-    accent: oklchToHex(accentL, accentC, (seedHue + 180 + (Math.random() * 40 - 20)) % 360),
+    secondary: oklchToHex(accentL, accentC * 0.8, (seedHue + 30) % 360),
+    accent: oklchToHex(accentL, accentC, (seedHue + 180) % 360),
   }
 
-  // ANSI Colors with Dynamic Hue Distribution
+  // Strategy Override: Bezier (Smooth Background Ramp)
+  if (strategy === 'bezier') {
+    const startColor = theme.background!
+    const endColor = oklchToHex(isDark ? bgL + 0.3 : bgL - 0.3, accentC, seedHue)
+    theme.mantle = bezierInterpolate(startColor, endColor, 0.1)
+    theme.crust = bezierInterpolate(startColor, endColor, 0.2)
+    theme.surface0 = bezierInterpolate(startColor, endColor, 0.4)
+    theme.surface1 = bezierInterpolate(startColor, endColor, 0.6)
+    theme.surface2 = bezierInterpolate(startColor, endColor, 0.8)
+  }
+
   const ansiNames = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
   const baseHues = { red: 29, green: 145, yellow: 85, blue: 260, magenta: 320, cyan: 195, white: seedHue }
 
   theme.black = oklchToHex(isDark ? bgL + 0.10 : bgL - 0.10, bgC * 0.5, seedHue)
   theme.brightBlack = oklchToHex(isDark ? bgL + 0.25 : bgL - 0.25, bgC * 0.4, seedHue)
 
+  let normalL = isDark ? 0.65 : 0.45
+  let brightL = isDark ? 0.85 : 0.25
+
+  if (strategy === 'contrast') {
+    normalL = isDark ? 0.8 : 0.2
+    brightL = isDark ? 0.95 : 0.05
+  }
+
+  // Voronoi relaxation points
+  const voronoiPoints = strategy === 'voronoi' 
+    ? Array.from({ length: 8 }, () => ({ h: Math.random() * 360, c: 0.1 + Math.random() * 0.2 }))
+    : []
+
   ansiNames.forEach((name) => {
     let h = baseHues[name as keyof typeof baseHues]
-    
-    // Global Tinting: pull towards seedHue based on profile drift
-    const diff = h - seedHue
-    h = h - (diff * profile.hueDrift) + (Math.random() * 6 - 3)
+    let c = strategy === 'vibrant' ? 0.3 : 0.15
 
-    // Semantic Hue Anchoring (Safe Zones)
-    if (HUE_SAFE_ZONES[name]) {
-      const [min, max] = HUE_SAFE_ZONES[name]
-      if (h < min) h = min
-      if (h > max) h = max
+    // 1. Voronoi logic
+    if (strategy === 'voronoi') {
+      const p = voronoiPoints.reduce((prev, curr) => Math.abs(curr.h - h) < Math.abs(prev.h - h) ? curr : prev)
+      h = p.h
+      c = p.c
     }
+    
+    // 2. Hue Drift & Harmony logic
+    const diff = h - seedHue
+    h = h - (diff * profile.hueDrift)
 
-    // Harmony Shifts (applied after safe zone anchoring to ensure it doesn't break semantics too much)
-    if (mode === 'analogous') h = seedHue + (h - seedHue) * 0.3
-    else if (mode === 'monochrome') h = seedHue + (Math.random() * 40 - 20)
+    if (mode === 'analogous') h = seedHue + (h - seedHue) * 0.2
+    else if (mode === 'monochrome') h = seedHue
     else if (mode === 'triadic') {
       const triPoints = [seedHue, (seedHue + 120) % 360, (seedHue + 240) % 360]
       h = triPoints.reduce((prev, curr) => Math.abs(curr - h) < Math.abs(prev - h) ? curr : prev)
     }
 
-    // Perceptual ANSI Tuning
-    const hNorm = h % 360
-    let lBias = 0
-    if (hNorm > 220 && hNorm < 300) lBias = 0.05 // Blue/Indigo boost
-    if (hNorm > 50 && hNorm < 100) lBias = -0.05 // Yellow/Green nerf
+    // 3. Strategy logic
+    let finalHex = oklchToHex(normalL, c, h)
+    let finalBrightHex = oklchToHex(brightL, c, h)
 
-    // Dynamic Pop and Muted logic
-    const hueDist = Math.abs(((h - seedHue + 180 + 360) % 360) - 180) // 0 (same) to 180 (opposite)
-    let chromaScale = 1.0
-    if (hueDist < 45) chromaScale = 1.25 // "Hero" color closest to seed
-    else if (hueDist > 135) chromaScale = 0.8 // Muted opposite colors
+    if (strategy === 'thermal') {
+      const temps: Record<string, number> = { red: 1500, yellow: 3000, green: 5000, cyan: 8000, blue: 15000, magenta: 20000, white: 6500 }
+      finalHex = kelvinToHex(temps[name] || 5000)
+      const { h: th, c: tc } = hexToOklch(finalHex)
+      finalBrightHex = oklchToHex(brightL, tc, th)
+    } else if (strategy === 'interference') {
+      const thicknesses: Record<string, number> = { red: 750, yellow: 600, green: 520, cyan: 480, blue: 400, magenta: 350, white: 500 }
+      finalHex = interferenceToHex(thicknesses[name] || 500)
+      const { h: ih, c: ic } = hexToOklch(finalHex)
+      finalBrightHex = oklchToHex(brightL, ic, ih)
+    } else if (strategy === 'hueshift') {
+      // Warm highlights (lighten), Cool shadows (darken)
+      const shift = isDark ? -10 : 10 // Shift towards blue in dark, towards yellow in light
+      h = (h + shift + 360) % 360
+      finalHex = oklchToHex(normalL, c, h)
+      finalBrightHex = oklchToHex(brightL, c, (h + 10) % 360)
+    }
 
-    const finalL = isDark ? accentL + lBias : accentL - lBias
-    const finalC = accentC * chromaScale
+    // 4. Contrast enforcement
+    if (strategy === 'apca' || strategy === 'contrast') {
+      const targetLc = strategy === 'contrast' ? (isDark ? 75 : -85) : (isDark ? 60 : -70)
+      const { c: finalC, h: finalH } = hexToOklch(finalHex)
+      let bestL = isDark ? 0.7 : 0.3
+      for (let i = 0; i < 10; i++) {
+        const testHex = oklchToHex(bestL, finalC, finalH)
+        const currentLc = getAPCA(testHex, theme.background!)
+        if (isDark) {
+          if (currentLc < targetLc) bestL += 0.05
+          else break
+        } else {
+          if (currentLc > targetLc) bestL -= 0.05
+          else break
+        }
+      }
+      finalHex = oklchToHex(bestL, finalC, finalH)
+      finalBrightHex = oklchToHex(Math.min(1, bestL + 0.15), finalC, finalH)
+    }
 
-    const hex = oklchToHex(finalL, finalC, h)
-    const brightHex = oklchToHex(isDark ? Math.min(0.96, finalL + 0.15) : Math.max(0.04, finalL - 0.15), finalC * 1.15, h)
-    
-    ;(theme as any)[name] = hex
-    ;(theme as any)[`bright${name.charAt(0).toUpperCase() + name.slice(1)}`] = brightHex
+    theme[name as keyof ColorScheme] = finalHex
+    ;(theme as any)[`bright${name.charAt(0).toUpperCase() + name.slice(1)}`] = finalBrightHex
   })
 
-  // Delta-E Accessibility Guard (Red/Green distance)
-  // If Red and Green are too close perceptually, push them apart in lightness
-  const redHex = theme.red!
-  const greenHex = theme.green!
-  const de = deltaEOKLab(redHex, greenHex)
-  
-  if (de < 0.12) {
-    const red = hexToOklch(redHex)
-    const green = hexToOklch(greenHex)
-    
-    // Push them apart: Lighten the lighter one, darken the darker one
-    if (red.l > green.l) {
-      theme.red = oklchToHex(Math.min(0.9, red.l + 0.1), red.c, red.h)
-      theme.green = oklchToHex(Math.max(0.1, green.l - 0.1), green.c, green.h)
-    } else {
-      theme.green = oklchToHex(Math.min(0.9, green.l + 0.1), green.c, green.h)
-      theme.red = oklchToHex(Math.max(0.1, red.l - 0.1), red.c, red.h)
-    }
-    // Update bright variants too
-    theme.brightRed = oklchToHex(Math.min(0.98, hexToOklch(theme.red!).l + 0.15), hexToOklch(theme.red!).c * 1.15, hexToOklch(theme.red!).h)
-    theme.brightGreen = oklchToHex(Math.min(0.98, hexToOklch(theme.green!).l + 0.15), hexToOklch(theme.green!).c * 1.15, hexToOklch(theme.green!).h)
-  }
+  // Finalize shades
+  theme.white = oklchToHex(isDark ? 0.92 : 0.15, bgC * 0.2, seedHue)
+  theme.brightWhite = oklchToHex(isDark ? 0.98 : 0.05, bgC * 0.1, seedHue)
 
-  // Mapping Base16 slots
+  // Map Base16
   theme.base00 = theme.background; theme.base01 = theme.mantle; theme.base02 = theme.surface0;
   theme.base03 = theme.brightBlack; theme.base04 = theme.surface1; theme.base05 = theme.foreground;
   theme.base06 = theme.foreground; theme.base07 = theme.foreground;
   theme.base08 = theme.red; theme.base09 = theme.brightRed; theme.base0A = theme.yellow;
   theme.base0B = theme.green; theme.base0C = theme.cyan; theme.base0D = theme.blue;
   theme.base0E = theme.magenta; theme.base0F = theme.brightMagenta;
-
-  theme.white = oklchToHex(isDark ? 0.90 : 0.10, 0.01, seedHue)
-  theme.brightWhite = oklchToHex(isDark ? 0.99 : 0.01, 0.01, seedHue)
 
   const mergeLocked = (newScheme: Partial<ColorScheme>) => {
     Object.keys(currentScheme).forEach(key => {

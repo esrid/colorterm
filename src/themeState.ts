@@ -1,6 +1,7 @@
 import type { ColorScheme } from './types'
 import { DEFAULT_SCHEME } from './constants'
 import { generateCoherentTheme } from './themeGenerator'
+import type { GenerationStrategy } from './themeGenerator'
 import { generatePerceptualPair } from './colorUtils'
 
 export class ThemeState {
@@ -54,9 +55,9 @@ export class ThemeState {
     return new Set(this.lockedColors)
   }
 
-  randomize() {
+  randomize(strategy: GenerationStrategy = 'tonal') {
     this.pushToHistory()
-    this.currentScheme = generateCoherentTheme(this.currentScheme, this.lockedColors)
+    this.currentScheme = generateCoherentTheme(this.currentScheme, this.lockedColors, strategy)
     this.baseScheme = { ...this.currentScheme }
   }
 

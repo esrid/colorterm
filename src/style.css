@@ -524,6 +524,18 @@ input[type="range"] {
 }
 
 /* Morph label row */
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-card);
+  margin: 4px 0;
+}
+
 .morph-labels {
   display: flex;
   align-items: center;
