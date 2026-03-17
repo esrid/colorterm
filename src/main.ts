@@ -381,6 +381,7 @@ app.innerHTML = `
     <h3>Export Format</h3>
     <select id="export-format">
       <option value="ghostty">Ghostty</option>
+      <option value="konsole">Konsole (.colorscheme)</option>
       <option value="xterm">xterm.js (JSON)</option>
       <option value="vscode">VS Code Terminal</option>
       <option value="warp">Warp</option>
@@ -829,9 +830,9 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
   const btn = e.currentTarget as HTMLButtonElement; const originalText = btn.textContent; btn.textContent = '📦 Generating ZIP...'; btn.disabled = true
   const currentScheme = themeState.getCurrentScheme()
   try {
-    const zip = new JSZip(); const formats = ['ghostty', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime']
+    const zip = new JSZip(); const formats = ['ghostty', 'konsole', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime']
     formats.forEach(f => {
-      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'
+      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (f === 'konsole') ext = 'colorscheme'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'
       zip.file(`${f}/theme.${ext}`, generateColorSchemeExport(f, currentScheme))
       const settings = generateSettingsExport(f); if (settings && !settings.startsWith('# Settings not supported')) zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : ext}`, settings)
     })

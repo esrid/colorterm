@@ -10,7 +10,7 @@ A simple tool to help you build and export terminal color schemes. It handles th
 -   **Image-to-Theme:** Upload any image to automatically extract a balanced 16-color palette.
 -   **Deep Editor Depth:** Support for layered backgrounds (`mantle`, `crust`, `surface`) following the Catppuccin style.
 -   **Accessibility Tools:** Built-in WCAG contrast auditing (AA/AAA) with a one-click "Auto-Fix" button and vision simulation.
--   **15+ Export Formats:** Native support for Foot, Helix, Neovim, VS Code (Full UI), Zellij, Tmux, Nix, and more.
+-   **15+ Export Formats:** Native support for Foot, Konsole, Helix, Neovim, VS Code (Full UI), Zellij, Tmux, Nix, and more.
 -   **Interactive Sandbox:** A live mock terminal responding to `ls`, `git`, and `htop` commands.
 -   **Desktop Previews:** Upload wallpapers to see how transparency and backdrop blur look in-context.
 -   **No Backend:** Everything stays in your browser. Share themes instantly via compressed, state-persistent URLs.

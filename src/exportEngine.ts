@@ -21,7 +21,41 @@ export function generateColorSchemeExport(format: string, scheme: ColorScheme): 
 	</dict>`
   }
 
+  const konsoleColor = (label: string, hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return `[${label}]
+Color=${r},${g},${b}`
+  }
+
   switch (format) {
+    case 'konsole':
+      return `[General]
+Description=ColorTerm Generated Theme
+Opacity=1
+Wallpaper=
+
+${konsoleColor('Background', scheme.background)}
+${konsoleColor('Foreground', scheme.foreground)}
+${konsoleColor('BackgroundIntense', scheme.background)}
+${konsoleColor('ForegroundIntense', scheme.foreground)}
+${konsoleColor('Color0', scheme.black)}
+${konsoleColor('Color0Intense', scheme.brightBlack)}
+${konsoleColor('Color1', scheme.red)}
+${konsoleColor('Color1Intense', scheme.brightRed)}
+${konsoleColor('Color2', scheme.green)}
+${konsoleColor('Color2Intense', scheme.brightGreen)}
+${konsoleColor('Color3', scheme.yellow)}
+${konsoleColor('Color3Intense', scheme.brightYellow)}
+${konsoleColor('Color4', scheme.blue)}
+${konsoleColor('Color4Intense', scheme.brightBlue)}
+${konsoleColor('Color5', scheme.magenta)}
+${konsoleColor('Color5Intense', scheme.brightMagenta)}
+${konsoleColor('Color6', scheme.cyan)}
+${konsoleColor('Color6Intense', scheme.brightCyan)}
+${konsoleColor('Color7', scheme.white)}
+${konsoleColor('Color7Intense', scheme.brightWhite)}`
     case 'xterm':
       return JSON.stringify(scheme, null, 2)
     case 'neovim':
@@ -890,6 +924,9 @@ theme = "colorterm"`
     case 'warp':
       return `font_size: ${size}
 font_name: "${font}"`
+    case 'konsole':
+      return `# Save to ~/.local/share/konsole/ColorTerm.colorscheme
+# Then apply it in your Konsole Profile settings.`
     case 'xterm':
       return JSON.stringify({
         fontFamily: font,
