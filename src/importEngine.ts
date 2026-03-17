@@ -63,11 +63,70 @@ export function parseThemeFromString(input: string): Partial<ColorScheme> | null
     return /^[0-9a-fA-F]{6}$/.test(hex) ? '#' + hex.toLowerCase() : '#' + hex
   }
 
+  const rgbToHex = (r: string, g: string, b: string) => {
+    const toHex = (n: number) => {
+      const hex = Math.max(0, Math.min(255, n)).toString(16)
+      return hex.length === 1 ? '0' + hex : hex
+    }
+    return '#' + toHex(parseInt(r)) + toHex(parseInt(g)) + toHex(parseInt(b))
+  }
+
   // Generic key-value parser (INI, TOML, Xresources, CSS vars)
   const lines = input.split('\n')
+  let currentSection = ''
+
   lines.forEach(line => {
     line = line.trim()
     if (!line || line.startsWith('#') || line.startsWith('//') || line.startsWith('!')) return
+
+    const sectionMatch = line.match(/^\[(.*)\]$/)
+    if (sectionMatch) {
+      currentSection = sectionMatch[1]
+      return
+    }
+
+    // Handle Konsole (.colorscheme) and KDE Plasma (.colors)
+    if (line.includes(',')) {
+      const parts = line.split('=')
+      if (parts.length === 2) {
+        const key = parts[0].trim()
+        const rgb = parts[1].split(',')
+        if (rgb.length >= 3) {
+          const hex = rgbToHex(rgb[0], rgb[1], rgb[2])
+          
+          // Konsole
+          if (key === 'Color') {
+            if (currentSection === 'Background') scheme.background = hex
+            else if (currentSection === 'Foreground') scheme.foreground = hex
+            else if (currentSection === 'Cursor') scheme.cursor = hex
+            else if (currentSection === 'Color0') scheme.black = hex
+            else if (currentSection === 'Color1') scheme.red = hex
+            else if (currentSection === 'Color2') scheme.green = hex
+            else if (currentSection === 'Color3') scheme.yellow = hex
+            else if (currentSection === 'Color4') scheme.blue = hex
+            else if (currentSection === 'Color5') scheme.magenta = hex
+            else if (currentSection === 'Color6') scheme.cyan = hex
+            else if (currentSection === 'Color7') scheme.white = hex
+            else if (currentSection === 'Color0Intense') scheme.brightBlack = hex
+            else if (currentSection === 'Color1Intense') scheme.brightRed = hex
+            else if (currentSection === 'Color2Intense') scheme.brightGreen = hex
+            else if (currentSection === 'Color3Intense') scheme.brightYellow = hex
+            else if (currentSection === 'Color4Intense') scheme.brightBlue = hex
+            else if (currentSection === 'Color5Intense') scheme.brightMagenta = hex
+            else if (currentSection === 'Color6Intense') scheme.brightCyan = hex
+            else if (currentSection === 'Color7Intense') scheme.brightWhite = hex
+          }
+          
+          // KDE Plasma
+          if (currentSection === 'Colors:Window') {
+            if (key === 'BackgroundNormal') scheme.background = hex
+            if (key === 'ForegroundNormal') scheme.foreground = hex
+          } else if (currentSection === 'Colors:Selection') {
+            if (key === 'BackgroundNormal') scheme.surface1 = hex
+          }
+        }
+      }
+    }
 
     // Support for .Xresources (*.color0: hex) and CSS (--bg: hex)
     // Updated regex to handle the '.' or '*' in Xresources and '--' in CSS

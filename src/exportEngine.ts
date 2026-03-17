@@ -29,17 +29,24 @@ export function generateColorSchemeExport(format: string, scheme: ColorScheme): 
 Color=${r},${g},${b}`
   }
 
+  // Get dynamic opacity from DOM if available, default to 1
+  const opacityEl = document.getElementById('term-opacity') as HTMLInputElement | null;
+  const opacity = opacityEl ? opacityEl.value : "1";
+
   switch (format) {
     case 'konsole':
       return `[General]
 Description=ColorTerm Generated Theme
-Opacity=1
+Opacity=${opacity}
 Wallpaper=
 
 ${konsoleColor('Background', scheme.background)}
 ${konsoleColor('Foreground', scheme.foreground)}
 ${konsoleColor('BackgroundIntense', scheme.background)}
 ${konsoleColor('ForegroundIntense', scheme.foreground)}
+${konsoleColor('Cursor', scheme.cursor)}
+${konsoleColor('CursorText', scheme.background)}
+${konsoleColor('Selection', scheme.surface1)}
 ${konsoleColor('Color0', scheme.black)}
 ${konsoleColor('Color0Intense', scheme.brightBlack)}
 ${konsoleColor('Color1', scheme.red)}
@@ -56,6 +63,42 @@ ${konsoleColor('Color6', scheme.cyan)}
 ${konsoleColor('Color6Intense', scheme.brightCyan)}
 ${konsoleColor('Color7', scheme.white)}
 ${konsoleColor('Color7Intense', scheme.brightWhite)}`
+    case 'kde':
+      const toRgb = (hex: string) => `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)}`;
+      return `[General]
+Name=ColorTerm
+ColorScheme=ColorTerm
+
+[Colors:Window]
+BackgroundNormal=${toRgb(scheme.background)}
+ForegroundNormal=${toRgb(scheme.foreground)}
+BackgroundAlternate=${toRgb(scheme.surface0)}
+ForegroundInactive=${toRgb(scheme.brightBlack)}
+
+[Colors:Button]
+BackgroundNormal=${toRgb(scheme.surface0)}
+ForegroundNormal=${toRgb(scheme.foreground)}
+DecorationFocus=${toRgb(scheme.primary)}
+DecorationHover=${toRgb(scheme.surface1)}
+
+[Colors:View]
+BackgroundNormal=${toRgb(scheme.crust)}
+ForegroundNormal=${toRgb(scheme.foreground)}
+BackgroundAlternate=${toRgb(scheme.background)}
+
+[Colors:Selection]
+BackgroundNormal=${toRgb(scheme.primary)}
+ForegroundNormal=${toRgb(scheme.background)}
+
+[Colors:Tooltip]
+BackgroundNormal=${toRgb(scheme.mantle)}
+ForegroundNormal=${toRgb(scheme.foreground)}
+
+[WM]
+activeBackground=${toRgb(scheme.mantle)}
+activeForeground=${toRgb(scheme.foreground)}
+inactiveBackground=${toRgb(scheme.crust)}
+inactiveForeground=${toRgb(scheme.brightBlack)}`
     case 'xterm':
       return JSON.stringify(scheme, null, 2)
     case 'neovim':
@@ -925,8 +968,19 @@ theme = "colorterm"`
       return `font_size: ${size}
 font_name: "${font}"`
     case 'konsole':
-      return `# Save to ~/.local/share/konsole/ColorTerm.colorscheme
-# Then apply it in your Konsole Profile settings.`
+      return `# 1. Save theme to ~/.local/share/konsole/ColorTerm.colorscheme
+# 2. Save the below to ~/.local/share/konsole/ColorTerm.profile
+
+[Appearance]
+ColorScheme=ColorTerm
+Font=${font},${size},-1,5,50,0,0,0,0,0
+
+[General]
+Name=ColorTerm
+Parent=FALLBACK/`
+    case 'kde':
+      return `# Save the generated theme to ~/.local/share/color-schemes/ColorTerm.colors
+# Then select 'ColorTerm' in KDE Plasma Settings -> Appearance -> Colors`
     case 'xterm':
       return JSON.stringify({
         fontFamily: font,
