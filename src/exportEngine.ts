@@ -866,10 +866,19 @@ export function generateSettingsExport(format: string): string {
 
   switch (format) {
     case 'ghostty':
-      return `font-family = ${font}
+      return `# Method 1: Inline settings
+font-family = ${font}
 font-size = ${size}
 line-height = ${line}
 letter-spacing = ${space}
+background-opacity = ${opacity}
+
+# Method 2: Use as a theme
+# Save palette to ~/.config/ghostty/themes/colorterm
+# Then add this to your config:
+theme = colorterm
+font-family = ${font}
+font-size = ${size}
 background-opacity = ${opacity}`
     case 'kitty':
       return `font_family ${font}
@@ -914,14 +923,33 @@ alpha=${opacity}`
 theme "colorterm"`
     case 'tmux':
       return `# Save to ~/.tmux.conf
-source-file ~/.tmux/colorterm.conf`
+source-file ~/.tmux/colorterm.conf
+
+# Example status line adjustments:
+set -g status-style "bg=default,fg=default"
+set -g window-status-current-style "bg=default,fg=cyan,bold"`
     case 'nix':
-      return `# Import this into your configuration.nix or home.nix
-# let colorterm = import ./colorterm.nix; in { ... }`
+      return `# Example Home Manager configuration
+programs.alacritty = {
+  enable = true;
+  settings = {
+    font = {
+      normal = { family = "${font}"; };
+      size = ${size};
+    };
+    window.opacity = ${opacity};
+  };
+};`
     case 'tailwind':
       return `// Add this to your tailwind.config.js file`
     case 'css':
-      return `/* Add this to your global stylesheet */`
+      return `:root {
+  --term-font-family: "${font}", monospace;
+  --term-font-size: ${size}px;
+  --term-line-height: ${line};
+  --term-letter-spacing: ${space}px;
+  --term-bg-opacity: ${opacity};
+}`
     case 'base16':
       return `# Base16 (YAML) Format
 # Compatible with Base16 builders and templates`
@@ -991,8 +1019,26 @@ vim.cmd("colorscheme colorterm")`
   :family "${font}"
   :height ${Math.round(parseInt(size) * 10)})`
     case 'sublime':
-      return `<!-- Save as: Packages/User/ColorTerm.tmTheme -->
-<!-- Then set via: Preferences > Color Scheme > User > ColorTerm -->`
+      return `// Add to your Preferences.sublime-settings
+{
+  "font_face": "${font}",
+  "font_size": ${parseInt(size)},
+  "line_padding_top": ${Math.round((parseFloat(line) - 1) * 5)},
+  "line_padding_bottom": ${Math.round((parseFloat(line) - 1) * 5)}
+}
+// Note: color scheme is set via Preferences > Color Scheme`
+    case 'iterm2':
+      return JSON.stringify({
+        "Profiles": [
+          {
+            "Name": "ColorTerm",
+            "Guid": "COLORTERM-PROFILE-1",
+            "Normal Font": font + " " + size,
+            "Transparency": 1 - parseFloat(opacity),
+            "Use Transparency": true
+          }
+        ]
+      }, null, 2) + "\n\n// Save as ~/Library/Application Support/iTerm2/DynamicProfiles/ColorTerm.json"
     default:
       return '# Settings not supported for this format'
   }
