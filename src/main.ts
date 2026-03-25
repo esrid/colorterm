@@ -423,6 +423,7 @@ app.innerHTML = `
       <option value="zed">Zed (JSON)</option>
       <option value="emacs">Emacs (deftheme)</option>
       <option value="sublime">Sublime Text (.tmTheme)</option>
+      <option value="st">st - suckless terminal (config.h)</option>
     </select>
     
     <h3 style="margin-top: 24px;">Color Scheme</h3>
@@ -567,7 +568,7 @@ async function updateTerminalTheme() {
   })
   const format = (document.getElementById('export-format') as HTMLSelectElement).value
   const outputEl = document.getElementById('export-output')!, settingsEl = document.getElementById('export-settings')!
-  let lang = (format === 'neovim' || format === 'wezterm') ? 'lua' : (format === 'emacs') ? 'lisp' : (['iterm2', 'sublime'].includes(format)) ? 'xml' : (['ghostty', 'kitty', 'foot', 'alacritty'].includes(format) ? 'ini' : 'json')
+  let lang = (format === 'neovim' || format === 'wezterm') ? 'lua' : (format === 'emacs') ? 'lisp' : (['iterm2', 'sublime'].includes(format)) ? 'xml' : (['ghostty', 'kitty', 'foot', 'alacritty', 'st'].includes(format) ? 'ini' : 'json')
   outputEl.className = `language-${lang}`; settingsEl.className = `language-${lang}`
   outputEl.removeAttribute('data-highlighted'); settingsEl.removeAttribute('data-highlighted')
   outputEl.textContent = generateColorSchemeExport(format, currentScheme)
@@ -858,9 +859,9 @@ document.getElementById('batch-export')!.addEventListener('click', async (e) => 
   const currentScheme = themeState.getCurrentScheme()
   try {
     const JSZip = (await import('jszip')).default
-    const zip = new JSZip(); const formats = ['ghostty', 'konsole', 'kde', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime']
+    const zip = new JSZip(); const formats = ['ghostty', 'konsole', 'kde', 'iterm2', 'wezterm', 'kitty', 'alacritty', 'vscode', 'warp', 'windowsterminal', 'foot', 'xterm', 'neovim', 'helix', 'zellij', 'tmux', 'nix', 'tailwind', 'css', 'base16', 'zed', 'emacs', 'sublime', 'st']
     formats.forEach(f => {
-      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (f === 'konsole') ext = 'colorscheme'; else if (f === 'kde') ext = 'colors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'
+      let ext = 'conf'; if (f === 'iterm2') ext = 'itermcolors'; else if (f === 'konsole') ext = 'colorscheme'; else if (f === 'kde') ext = 'colors'; else if (['neovim', 'wezterm'].includes(f)) ext = 'lua'; else if (['alacritty', 'helix', 'zellij'].includes(f)) ext = 'toml'; else if (f === 'foot') ext = 'ini'; else if (['vscode', 'windowsterminal', 'xterm', 'tailwind', 'zed'].includes(f)) ext = 'json'; else if (f === 'css') ext = 'css'; else if (f === 'base16') ext = 'yaml'; else if (f === 'nix') ext = 'nix'; else if (f === 'emacs') ext = 'el'; else if (f === 'sublime') ext = 'tmTheme'; else if (f === 'st') ext = 'h'
       zip.file(`${f}/theme.${ext}`, generateColorSchemeExport(f, currentScheme))
       const settings = generateSettingsExport(f); if (settings && !settings.startsWith('# Settings not supported')) zip.file(`${f}/settings.${ext === 'itermcolors' ? 'txt' : (f === 'konsole' ? 'profile' : ext)}`, settings)
     })
